@@ -1,0 +1,11 @@
+.idea
+/build
+/target
+*.iml
+secrets.txt
+*/build
+*/target
+*/secrets.txt
+*/*.iml
+/data
+
