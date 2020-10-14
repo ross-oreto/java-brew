@@ -122,7 +122,7 @@ public class Paged<T> {
         }
 
         protected void pageToOffset() {
-            offset = ((number + (zeroBased ? 1 : 0)) * size) - size;
+            offset = Math.max(0, ((number + (zeroBased ? 1 : 0)) * size) - size);
         }
 
         protected void offsetToPage() {
