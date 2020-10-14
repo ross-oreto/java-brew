@@ -3,6 +3,7 @@ package io.oreto.brew.data.jpa;
 import io.oreto.brew.collections.Lists;
 import io.oreto.brew.data.Paged;
 import io.oreto.brew.data.jpa.repo.*;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -13,10 +14,12 @@ import org.springframework.test.context.support.AnnotationConfigContextLoader;
 
 import javax.annotation.Resource;
 import javax.persistence.EntityManager;
+import javax.persistence.EntityManagerFactory;
 import javax.transaction.Transactional;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 @RunWith(SpringJUnit4ClassRunner.class)
 @ContextConfiguration(
@@ -25,10 +28,10 @@ import static org.junit.Assert.assertEquals;
 @Transactional
 @Rollback(false)
 public class JpaTest {
-
+    private static EntityManager em;
     private static boolean setup;
 
-    @Resource private EntityManager em;
+    @Resource private EntityManagerFactory entityManagerFactory;
     @Resource private Entity1Repository entity1Repository;
     @Resource private Entity2Repository entity2Repository;
     @Resource private Entity3Repository entity3Repository;
@@ -37,7 +40,8 @@ public class JpaTest {
     public void setup() {
         if (!setup) {
             setup = true;
-            entity1Repository.save(
+            em = entityManagerFactory.createEntityManager();
+            DataStore.save(em,
                     new Entity1("test")
                             .withEntity2s(Lists.of(
                                     new Entity2("e1")
@@ -48,11 +52,16 @@ public class JpaTest {
                             )
             );
 
-            entity1Repository.save(
+            DataStore.save(em,
                     new Entity1("test2")
                             .withEntity2s(Lists.of(new Entity2("ee")))
             );
         }
+    }
+
+    @AfterClass
+    public static void tearDown() {
+        em.close();
     }
 
     @Test
@@ -93,5 +102,23 @@ public class JpaTest {
                 , Entity2.class);
         List<Entity2> result = query.getList();
         assertEquals(1, result.size());
+    }
+
+    @Test
+    public void crud() {
+        DataStore.save(em,
+            new Entity1("test3").withEntity2s(Lists.of(new Entity2("e20")))
+        );
+
+        Entity1 u = DataStore.get(em, Entity1.class,1L).orElse(null);
+        assert u != null;
+        u.setName("update");
+        DataStore.update(em, u);
+        assertEquals("update", DataStore.get(em, Entity1.class, 1L).get().getName());
+
+        Paged<Entity1> paged = DataStore.find(em, Entity1.class, "name:test3");
+        assertEquals(1, paged.getPage().getNumber());
+        DataStore.delete(em, Entity1.class, paged.getList().get(0).getId());
+        assertTrue(DataStore.find(em, Entity1.class,"name:test3").getList().isEmpty());
     }
 }

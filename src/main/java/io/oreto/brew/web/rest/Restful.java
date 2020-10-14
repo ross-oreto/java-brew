@@ -1,12 +1,12 @@
 package io.oreto.brew.web.rest;
 
-import io.oreto.brew.data.Crud;
 import io.oreto.brew.data.Model;
+import io.oreto.brew.data.jpa.Store;
 import io.oreto.brew.web.http.StatusCode;
 
 import java.util.Optional;
 
-public interface Restful<ID, T extends Model<ID>> extends Crud<ID, T> {
+public interface Restful<ID, T extends Model<ID>> extends Store<ID, T> {
     default RestResponse list(String q, Integer page, Integer max, String sort) {
         return RestResponse.of(StatusCode.OK_CODE, List(q, page, max, sort));
     }

@@ -1,7 +1,9 @@
 package io.oreto.brew.data;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class Paged<T> {
     public static <T> Paged<T> of(List<T> list, Page page) {
@@ -95,6 +97,11 @@ public class Paged<T> {
         public Page withOffset(int offset) {
             this.offset = offset;
             offsetToPage();
+            return this;
+        }
+
+        public Page withSorting(String... sorting) {
+            this.sorting = Sort.of(Arrays.stream(sorting).collect(Collectors.toList()));
             return this;
         }
 
