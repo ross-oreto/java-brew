@@ -4,9 +4,9 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
-import io.oreto.brew.security.UserDetails;
 import io.oreto.brew.json.JSON;
 import io.oreto.brew.security.Anonymous;
+import io.oreto.brew.security.UserDetails;
 import io.oreto.brew.str.Str;
 import io.oreto.brew.web.http.HttpContext;
 import io.oreto.brew.web.page.constants.C;
@@ -56,7 +56,7 @@ public class Jwt {
     }
 
     static Claims readJwt(SecretKey key, String jwt) {
-        return Jwts.parser().setSigningKey(key).parseClaimsJws(jwt).getBody();
+        return Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(jwt).getBody();
     }
 
     @SuppressWarnings("unchecked")
@@ -140,5 +140,9 @@ public class Jwt {
 
     public <T extends UserDetails> T readUser(String jwt, Class<T> userClass) {
         return readUser(getKey(), jwt, userClass);
+    }
+
+    public String getCookieName() {
+        return cookieName;
     }
 }

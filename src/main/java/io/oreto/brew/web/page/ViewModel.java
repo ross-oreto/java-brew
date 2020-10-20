@@ -5,10 +5,10 @@ import io.oreto.brew.obj.Reflect;
 import io.oreto.brew.security.UserDetails;
 import io.oreto.brew.str.Str;
 import io.oreto.brew.web.page.constants.C;
-import io.oreto.brew.web.route.Navigation;
 import io.oreto.brew.web.route.Routing;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.ResourceBundle;
 import java.util.function.Consumer;
@@ -20,9 +20,10 @@ public class ViewModel extends Page {
         return new ViewModel();
     }
 
-    public static ViewModel of(String lang) {
+    public static ViewModel of(Locale locale) {
         return new ViewModel()
-                .withResourceBundle(ResourceBundle.getBundle(C.messages, toLocale(lang)));
+                .withLocale(locale)
+                .withResourceBundle(ResourceBundle.getBundle(C.messages, locale));
     }
 
     public static ViewModel of(ResourceBundle resourceBundle) {
@@ -44,7 +45,6 @@ public class ViewModel extends Page {
     private String assetPath;
     private String distPath;
     private Routing routing;
-    private List<Navigation> navigation;
     private UserDetails user;
 
     protected ViewModel() {}
@@ -65,9 +65,6 @@ public class ViewModel extends Page {
     public Routing getRouting() {
         return routing;
     }
-    public List<Navigation> getNavigation() {
-        return navigation;
-    }
     public UserDetails getUser() {
         return user;
     }
@@ -85,19 +82,6 @@ public class ViewModel extends Page {
     public ViewModel withRouting(Routing routing) {
         this.routing = routing;
         return this;
-    }
-
-    public ViewModel withNavigation(List<Navigation> navigation) {
-        this.navigation = navigation;
-        return this;
-    }
-
-    public ViewModel withLang(String lang) {
-        return withData(C.lang, lang);
-    }
-
-    public String getLang() {
-        return at(C.lang).toString();
     }
 
     public ViewModel withData(String name, Object value) {
@@ -188,6 +172,12 @@ public class ViewModel extends Page {
         return getData().get(name);
     }
 
+    public ViewModel localize() {
+        notifications.forEach(it -> it.localize(locale));
+        getForms().forEach(it -> it.localize(locale));
+        return this;
+    }
+
     public String i18n(String key) {
         return I18n(resourceBundle, key).orElse(key) ;
     }
@@ -236,13 +226,15 @@ public class ViewModel extends Page {
     }
 
     @Override
-    public ViewModel withResourceBundle(ResourceBundle resourceBundle) {
-        super.withResourceBundle(resourceBundle);
+    public ViewModel withLocale(Locale locale) {
+        super.withLocale(locale);
         return this;
     }
 
-    public ViewModel withResourceBundle(String lang) {
-        return withResourceBundle(ResourceBundle.getBundle(C.messages, toLocale(lang)));
+    @Override
+    public ViewModel withResourceBundle(ResourceBundle resourceBundle) {
+        super.withResourceBundle(resourceBundle);
+        return this;
     }
 
     @Override

@@ -52,12 +52,27 @@ public class DataStore<ID, T> implements Store<ID, T> {
                 , entityClass);
     }
 
+    public static <T> Optional<T> findOne(EntityManager entityManager
+            , Class<T> entityClass
+            , String q
+            , String... sort) {
+        Paged<T> list = QueryParser.query(q
+                , Paged.Page.of(1, 1, Arrays.stream(sort).collect(Collectors.toList()))
+                , entityManager
+                , entityClass);
+        return list.getPage().getCount() > 0 ? Optional.of(list.getList().get(0)) : Optional.empty();
+    }
+
     public static <T> T save(EntityManager entityManager, T t) {
         EntityTransaction trx = entityManager.getTransaction();
         try {
-            trx.begin();
-            entityManager.persist(t);
-            trx.commit();
+            if (trx.isActive())
+                entityManager.persist(t);
+            else {
+                trx.begin();
+                entityManager.persist(t);
+                trx.commit();
+            }
             return t;
         } catch(Exception x) {
             trx.rollback();
@@ -68,7 +83,14 @@ public class DataStore<ID, T> implements Store<ID, T> {
     public static <ID, T> Optional<T> get(EntityManager entityManager, Class<T> entityClass, ID id) {
         EntityTransaction trx = entityManager.getTransaction();
         try {
-            T t = entityManager.find(entityClass, id);
+            T t;
+            if (trx.isActive())
+                t = entityManager.find(entityClass, id);
+            else {
+                trx.begin();
+                t = entityManager.find(entityClass, id);
+                trx.commit();
+            }
             return t == null ? Optional.empty() : Optional.of(t);
         } catch (Exception x) {
             trx.rollback();
@@ -79,9 +101,14 @@ public class DataStore<ID, T> implements Store<ID, T> {
     public static <T> T update(EntityManager entityManager, T t) {
         EntityTransaction trx = entityManager.getTransaction();
         try {
-            trx.begin();
-            T entity = entityManager.merge(t);
-            trx.commit();
+            T entity;
+            if (trx.isActive())
+                entity = entityManager.merge(t);
+            else {
+                trx.begin();
+                entity = entityManager.merge(t);
+                trx.commit();
+            }
             return entity;
         } catch(Exception x) {
             trx.rollback();
@@ -92,10 +119,16 @@ public class DataStore<ID, T> implements Store<ID, T> {
     public static <ID, T> T delete(EntityManager entityManager, Class<T> entityClass, ID id) {
         EntityTransaction trx = entityManager.getTransaction();
         try {
-            trx.begin();
-            Optional<T> t = get(entityManager, entityClass, id);
-            entityManager.remove(t.orElseThrow(EntityNotFoundException::new));
-            trx.commit();
+            Optional<T> t;
+            if (trx.isActive()) {
+                t = get(entityManager, entityClass, id);
+                entityManager.remove(t.orElseThrow(EntityNotFoundException::new));
+            } else {
+                trx.begin();
+                t = get(entityManager, entityClass, id);
+                entityManager.remove(t.orElseThrow(EntityNotFoundException::new));
+                trx.commit();
+            }
             return t.get();
         } catch(Exception x) {
             trx.rollback();
@@ -126,6 +159,11 @@ public class DataStore<ID, T> implements Store<ID, T> {
     @Override
     public Paged<T> List(String q, Integer page, Integer max, String... sort) {
         return find(entityManager(), entityClass(), q, page, max, sort);
+    }
+
+    @Override
+    public Optional<T> ListSingle(String q, String... sort) {
+        return findOne(entityManager(), entityClass(), q, sort);
     }
 
     @Override
