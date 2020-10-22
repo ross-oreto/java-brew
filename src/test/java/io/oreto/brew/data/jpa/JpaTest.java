@@ -65,6 +65,16 @@ public class JpaTest {
     }
 
     @Test
+    public void query0() {
+        Paged<Entity1> query = QueryParser.query(
+                "name:test"
+                , em
+                , Entity1.class);
+        List<Entity1> result = query.getList();
+        assertEquals(3, result.get(0).getEntity2s().size());
+    }
+
+    @Test
     public void query1() {
         Paged<Entity1> query = QueryParser.query(
                 "count{entity2s}::eq:1 or entity2s.entity3s.name:e5"

@@ -2,7 +2,7 @@ package io.oreto.brew.web.http;
 
 public enum HttpVerb {
 
-    GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD, TRACE, ANY;
+    GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD, TRACE, ANY, WS;
 
     public static HttpVerb from(String verb) {
         try {

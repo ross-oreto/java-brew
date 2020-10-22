@@ -355,7 +355,9 @@ public class QueryParser {
         }
 
         protected void setValue(Path<T> path) {
-            if (path.getJavaType() == LocalDate.class) {
+            if (Str.EMPTY.equals(s))
+                value = null;
+            else if (path.getJavaType() == LocalDate.class) {
                 value = LocalDate.parse(s);
             } else if (path.getJavaType() == LocalDateTime.class) {
                 value = LocalDateTime.parse(s);

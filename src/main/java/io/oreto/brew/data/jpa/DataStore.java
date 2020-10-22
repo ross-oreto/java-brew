@@ -2,14 +2,30 @@ package io.oreto.brew.data.jpa;
 
 import io.oreto.brew.data.Paged;
 
+import javax.persistence.EntityGraph;
 import javax.persistence.EntityManager;
 import javax.persistence.EntityNotFoundException;
 import javax.persistence.EntityTransaction;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-public class DataStore<ID, T> implements Store<ID, T> {
+public class DataStore {
+    public static final Map<String, Object> EMPTY_MAP = new HashMap<String, Object>();
+
+    public static <T> Map<String, Object> fetch(EntityManager entityManager, Class<T> entityClass,  String... fetch) {
+        if (fetch.length == 0)
+            return EMPTY_MAP;
+        Map<String, Object> hints = new HashMap<String, Object>();
+        EntityGraph<T> entityGraph = entityManager.createEntityGraph(entityClass);
+        for (String graph : fetch)
+            entityGraph.addSubgraph(graph);
+        hints.put("javax.persistence.loadgraph", entityGraph);
+        return hints;
+    }
+
     public static <T> Paged<T> find(EntityManager entityManager
             , Class<T> entityClass
             , String q
@@ -80,15 +96,16 @@ public class DataStore<ID, T> implements Store<ID, T> {
         }
     }
 
-    public static <ID, T> Optional<T> get(EntityManager entityManager, Class<T> entityClass, ID id) {
+    public static <ID, T> Optional<T> get(EntityManager entityManager, Class<T> entityClass, ID id, String... fetch) {
         EntityTransaction trx = entityManager.getTransaction();
         try {
             T t;
+
             if (trx.isActive())
-                t = entityManager.find(entityClass, id);
+                t = entityManager.find(entityClass, id, fetch(entityManager, entityClass, fetch));
             else {
                 trx.begin();
-                t = entityManager.find(entityClass, id);
+                t = entityManager.find(entityClass, id, fetch(entityManager, entityClass, fetch));
                 trx.commit();
             }
             return t == null ? Optional.empty() : Optional.of(t);
@@ -134,55 +151,5 @@ public class DataStore<ID, T> implements Store<ID, T> {
             trx.rollback();
             throw x;
         }
-    }
-
-    private EntityManager entityManager;
-    private final Class<T> entityClass;
-
-    public DataStore(Class<T> entityClass) {
-        this.entityClass = entityClass;
-    }
-
-    public DataStore<ID, T> em(EntityManager entityManager) {
-        this.entityManager = entityManager;
-        return this;
-    }
-
-    public EntityManager entityManager() {
-        return entityManager;
-    }
-
-    public Class<T> entityClass() {
-        return entityClass;
-    }
-
-    @Override
-    public Paged<T> List(String q, Integer page, Integer max, String... sort) {
-        return find(entityManager(), entityClass(), q, page, max, sort);
-    }
-
-    @Override
-    public Optional<T> ListSingle(String q, String... sort) {
-        return findOne(entityManager(), entityClass(), q, sort);
-    }
-
-    @Override
-    public T Create(T t) {
-        return save(entityManager(), t);
-    }
-
-    @Override
-    public Optional<T> Retrieve(ID id) {
-        return get(entityManager(), entityClass(), id);
-    }
-
-    @Override
-    public T Update(T t) {
-        return update(entityManager(), t);
-    }
-
-    @Override
-    public T Delete(ID id) {
-        return delete(entityManager(), entityClass(), id);
     }
 }
