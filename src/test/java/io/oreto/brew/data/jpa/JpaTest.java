@@ -66,50 +66,52 @@ public class JpaTest {
 
     @Test
     public void query0() {
-        Paged<Entity1> query = QueryParser.query(
-                "name:test"
-                , em
-                , Entity1.class);
+        Paged<Entity1> query =
+            DataStore.Q.of(Entity1.class).eq("name", "test").find(em);
         List<Entity1> result = query.getList();
         assertEquals(3, result.get(0).getEntity2s().size());
     }
 
     @Test
     public void query1() {
-        Paged<Entity1> query = QueryParser.query(
-                "count{entity2s}::eq:1 or entity2s.entity3s.name:e5"
-                , em
-                , Entity1.class);
+        Paged<Entity1> query = DataStore.Q.of(Entity1.class)
+                .eq(DataStore.Q.Func.of(Function.count, "entity2s"), 1)
+                .or()
+                .eq("entity2s.entity3s.name", "e5")
+                .find(em);
         List<Entity1> result = query.getList();
         assertEquals(2, result.size());
     }
 
     @Test
     public void query2() {
-        Paged<Entity2> query = QueryParser.query(
-                "entity3s.name:e03 or count{entity3s}:0"
-                , em
-                , Entity2.class);
+        Paged<Entity2> query = DataStore.Q.of(Entity2.class)
+                .eq("entity3s.name", "e03")
+                .or()
+                .eq(DataStore.Q.Func.of(Function.count, "entity3s"), 0)
+                .find(em);
+
         List<Entity2> result = query.getList();
         assertEquals(3, result.size());
     }
 
     @Test
     public void query3() {
-        Paged<Entity2> query = QueryParser.query(
-                "count{entity3s.id}:2 or count{entity3s}:1 or count{entity3s}:0"
-                , em
-                , Entity2.class);
+        Paged<Entity2> query = DataStore.Q.of(Entity2.class)
+                .eq(DataStore.Q.Func.of(Function.count, "entity3s.id"), 2)
+                .or()
+                .eq(DataStore.Q.Func.of(Function.count, "entity3s"), 1)
+                .eq(DataStore.Q.Func.of(Function.count, "entity3s"), 0)
+                .find(em);
         List<Entity2> result = query.getList();
         assertEquals(4, result.size());
     }
 
     @Test
     public void query4() {
-        Paged<Entity2> query = QueryParser.query(
-                "entity3s.name::endswith:03"
-                , em
-                , Entity2.class);
+        Paged<Entity2> query = DataStore.Q.of(Entity2.class)
+                .endsWith("entity3s.name", "03")
+                .find(em);
         List<Entity2> result = query.getList();
         assertEquals(1, result.size());
     }

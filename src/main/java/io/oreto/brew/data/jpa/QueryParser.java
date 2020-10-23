@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
+@SuppressWarnings({"unchecked", "rawtypes"})
 public class QueryParser {
 
     static final char QUOTE = '"';
@@ -211,10 +212,13 @@ public class QueryParser {
     public static <T> Paged<T> query(String q
             , Paged.Page page
             , EntityManager em
-            , Class<T> entityClass) {
+            , Class<T> entityClass, String... fetch) {
         CriteriaBuilder builder = em.getCriteriaBuilder();
         CriteriaQuery<T> criteriaQuery = builder.createQuery(entityClass);
         Root<T> root = criteriaQuery.from(entityClass);
+        for(String name : fetch) {
+            root.fetch(name);
+        }
 
         Predicates predicates = parse(new QueryState<T>(q, builder, root));
 
@@ -241,8 +245,8 @@ public class QueryParser {
 
     public static <T> Paged<T> query(String q
             , EntityManager em
-            , Class<T> entityClass) {
-        return query(q, Paged.Page.of(), em, entityClass);
+            , Class<T> entityClass, String... fetch) {
+        return query(q, Paged.Page.of(), em, entityClass, fetch);
     }
 
     static class Expression<T> {
@@ -266,31 +270,6 @@ public class QueryParser {
 
             public static boolean isValid(String s) {
                 return Arrays.stream(values()).map(Enum::name).collect(Collectors.toList()).contains(s);
-            }
-        }
-
-        public enum Function {
-            count(true)
-            , avg(true)
-            , sum(true)
-            , max(true)
-            , min(true)
-            , greatest(true)
-            , least(true)
-            , count_distinct(true);
-
-            private boolean aggregate;
-
-            Function(boolean aggregate) {
-                this.aggregate = aggregate;
-            }
-
-            public static boolean isValid(String s) {
-                return Arrays.stream(values()).map(Enum::name).collect(Collectors.toList()).contains(s);
-            }
-
-            public boolean isAggregate() {
-                return aggregate;
             }
         }
 
@@ -388,7 +367,6 @@ public class QueryParser {
             }
         }
 
-        @SuppressWarnings({"unchecked", "rawtypes"})
         public javax.persistence.criteria.Expression applyFunction(Function function, Path path, CriteriaBuilder cb) {
             if (function == Function.count) {
                 return cb.count(path);
@@ -461,7 +439,6 @@ public class QueryParser {
                     : Optional.empty();
         }
 
-        @SuppressWarnings({"unchecked", "rawtypes"})
         public Predicate apply(QueryState state) {
             Root root = state.root;
             CriteriaBuilder cb = state.cb;
