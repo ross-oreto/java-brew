@@ -20,6 +20,10 @@ public class Form<T> implements Notifiable, Validatable<T> {
         return new Form<T>(cls.getSimpleName()).withField(cls);
     }
 
+    public static <T> Form<T> of(String name) {
+        return new Form<>(name);
+    }
+
     protected String name;
     protected List<Field> fields = new ArrayList<>();
     protected T data;
@@ -96,22 +100,20 @@ public class Form<T> implements Notifiable, Validatable<T> {
         return validate().isValid();
     }
 
-    public boolean submit(Consumer<Form<T>> success) {
+    public Form<T> submit(Consumer<Form<T>> success) {
         if (validate().isValid()){
             success.accept(this);
-            return true;
         }
-        return false;
+        return this;
     }
 
-    public boolean submit(Consumer<Form<T>> success, Consumer<Form<T>> failure) {
+    public Form<T> submit(Consumer<Form<T>> success, Consumer<Form<T>> failure) {
         if (validate().isValid()) {
             success.accept(this);
-            return true;
         } else {
             failure.accept(this);
-            return false;
         }
+        return this;
     }
 
     public boolean isValid() {
@@ -194,6 +196,22 @@ public class Form<T> implements Notifiable, Validatable<T> {
     @Override
     public List<Notification> getNotifications() {
         return notifications;
+    }
+
+    @Override
+    public Form<T> notify(String name, String message, Notification.Type type, String... args) {
+        getNotifications().add(
+                new Notification(name, formPreface(message), type).withArgs(args)
+        );
+        return this;
+    }
+
+    public Form<T> notify(String message, Notification.Type type, String... args) {
+        return notify(name, message, type, args);
+    }
+
+    public Form<T> notify(String message, String... args) {
+        return notify(name, message, Notification.Type.info, args);
     }
 
     @Override

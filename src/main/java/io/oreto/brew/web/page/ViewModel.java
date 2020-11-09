@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.ResourceBundle;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -42,8 +43,6 @@ public class ViewModel extends Page {
 
     @JsonIgnore private String view;
 
-    private String assetPath;
-    private String distPath;
     private Routing routing;
     private UserDetails user;
 
@@ -57,10 +56,6 @@ public class ViewModel extends Page {
 
     public String getView() {
         return view;
-    }
-    public String getAssetPath() { return assetPath; }
-    public String getDistPath() {
-        return distPath;
     }
     public Routing getRouting() {
         return routing;
@@ -148,6 +143,15 @@ public class ViewModel extends Page {
         return this;
     }
 
+    public boolean submit() {
+        return getForms().stream().allMatch(it -> submit());
+    }
+
+    public ViewModel submit(BiConsumer<Boolean, ViewModel> consumer) {
+        consumer.accept(submit(), this);
+        return this;
+    }
+
     public <T> Form<T> FormWithFields(String name, Class<T> tClass) {
         Form<T> newForm = Form(name);
         newForm.withField(tClass);
@@ -170,6 +174,24 @@ public class ViewModel extends Page {
 
     public Object at(String name) {
         return getData().get(name);
+    }
+
+    @Override
+    public ViewModel notify(String name, String message, Notification.Type type, String... args) {
+        super.notify(name, message, type, args);
+        return this;
+    }
+
+    @Override
+    public ViewModel notify(String name, String message, String... args) {
+        super.notify(name, message, args);
+        return this;
+    }
+
+    @Override
+    public ViewModel notify(List<Notification> notifications) {
+        super.notify(notifications);
+        return this;
     }
 
     public ViewModel localize() {

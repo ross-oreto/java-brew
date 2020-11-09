@@ -12,6 +12,8 @@ public class Lists {
     public static final long DEFAULT_SKIP = 0;
     public static final long DEFAULT_LIMIT = 20;
 
+    public static final List<String> EMPTY_STRING_LIST = new ArrayList<String>();
+
     public static <T> List<Indexed<T>> withIndex(Iterable<T> collection) {
         List<Indexed<T>> l = new ArrayList<>();
         int i = 0;
@@ -104,9 +106,9 @@ public class Lists {
             public int compare(T o1, T o2) {
                 try {
                     Comparable<Object> v1 =
-                            (Comparable<Object>) Reflect.getFieldValue(o1, Reflect.getField(o1.getClass(), field));
+                            (Comparable<Object>) Reflect.getFieldValue(o1, field);
                     Comparable<Object> v2 =
-                            (Comparable<Object>) Reflect.getFieldValue(o2, Reflect.getField(o2.getClass(), field));
+                            (Comparable<Object>) Reflect.getFieldValue(o2, field);
                     return descending ? v2.compareTo(v1) : v1.compareTo(v2);
                 } catch (Exception ignored) {
                     return 0;

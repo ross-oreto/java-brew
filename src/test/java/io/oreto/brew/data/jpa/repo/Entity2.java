@@ -13,6 +13,9 @@ public class Entity2 {
     @OneToMany(cascade = CascadeType.PERSIST)
     private List<Entity3> entity3s;
 
+    @OneToOne(cascade = CascadeType.PERSIST)
+    private Entity3 entity3;
+
     public Entity2() { }
 
     public Long getId() {
@@ -35,6 +38,10 @@ public class Entity2 {
         return entity3s;
     }
 
+    public Entity3 getEntity3() {
+        return entity3;
+    }
+
     public void setEntity3s(List<Entity3> entity3s) {
         this.entity3s = entity3s;
     }
@@ -55,6 +62,11 @@ public class Entity2 {
 
     public Entity2 withEntity3s(List<Entity3> entity3s) {
         this.entity3s = entity3s;
+        return this;
+    }
+
+    public Entity2 withEntity3(Entity3 entity3) {
+        this.entity3 = entity3;
         return this;
     }
 }

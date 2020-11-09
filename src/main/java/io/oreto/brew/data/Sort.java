@@ -2,6 +2,7 @@ package io.oreto.brew.data;
 
 
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 public class Sort {
@@ -19,7 +20,7 @@ public class Sort {
     }
 
     public static List<Sort> of(List<String> s) {
-        return s.stream().map(Sort::of).collect(Collectors.toList());
+        return s.stream().filter(Objects::nonNull).map(Sort::of).collect(Collectors.toList());
     }
 
     public static Sort of(String name, String direction) {

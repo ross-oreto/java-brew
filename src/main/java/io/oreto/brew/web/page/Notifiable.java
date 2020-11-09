@@ -24,17 +24,18 @@ public interface Notifiable {
                 .collect(Collectors.toList());
     }
 
-    default void notify(String name, String message, Notification.Type type, String...args) {
-        getNotifications().add(
-                new Notification(name, message, type).withArgs(args)
-        );
+    default Object notify(String name, String message, Notification.Type type, String...args) {
+        Notification notification = new Notification(name, message, type).withArgs(args);
+        getNotifications().add(notification);
+        return notification;
     }
 
-    default void notify(String name, String message, String...args) {
-        notify(name, message, Notification.Type.info, args);
+    default Object notify(String name, String message, String...args) {
+        return notify(name, message, Notification.Type.info, args);
     }
 
-    default void notify(List<Notification> notifications) {
+    default Object notify(List<Notification> notifications) {
         getNotifications().addAll(notifications);
+        return getNotifications();
     }
 }

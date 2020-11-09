@@ -10,16 +10,12 @@ public class MediaType {
     private static final String[] NO_ATTR = new String[0];
     private static final String[] UTF8_ATTR = {"charset=utf-8"};
 
-    /*******************************************************/
-
     public static final MediaType ANY = create("*/*");
     public static final MediaType TEXT_ANY = create("text/*");
     public static final MediaType APPLICATION_ANY = create("application/*");
     public static final MediaType IMAGE_ANY = create("image/*");
     public static final MediaType VIDEO_ANY = create("video/*");
     public static final MediaType AUDIO_ANY = create("audio/*");
-
-    /*******************************************************/
 
     public static final MediaType APPLICATION_ANDREW_INSET = create("application/andrew-inset", "ez");
     public static final MediaType APPLICATION_ANNODEX = create("application/annodex", "anx");
@@ -1156,8 +1152,6 @@ public class MediaType {
     public static final MediaType SVG = IMAGE_SVG_XML;
 
     public static final MediaType DEFAULT = MediaType.BINARY;
-
-    /*******************************************************/
 
     public static synchronized MediaType create(String type, String... fileExtensisons) {
         return create(type, NO_ATTR, fileExtensisons);

@@ -16,6 +16,7 @@ import javax.annotation.Resource;
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
 import javax.transaction.Transactional;
+import java.util.HashMap;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
@@ -43,8 +44,14 @@ public class JpaTest {
             em = entityManagerFactory.createEntityManager();
             DataStore.save(em,
                     new Entity1("test")
+                            .withStrings("test", "ing", "io", "oreto", "brew", "key")
+                            .withEntries(new HashMap<String, String>(){{
+                                put("key", "value");
+                            }})
+                            .withEntity2(new Entity2("oneE2").withEntity3(new Entity3("e2e3a")))
                             .withEntity2s(Lists.of(
                                     new Entity2("e1")
+                                            .withEntity3(new Entity3("oneE3"))
                                             .withEntity3s(Lists.of(new Entity3("e3"), new Entity3("e03")))
                                     , new Entity2("e4")
                                             .withEntity3s(Lists.of(new Entity3("e5")))
@@ -92,7 +99,7 @@ public class JpaTest {
                 .find(em);
 
         List<Entity2> result = query.getList();
-        assertEquals(3, result.size());
+        assertEquals(4, result.size());
     }
 
     @Test
@@ -104,7 +111,7 @@ public class JpaTest {
                 .eq(DataStore.Q.Func.of(Function.count, "entity3s"), 0)
                 .find(em);
         List<Entity2> result = query.getList();
-        assertEquals(4, result.size());
+        assertEquals(5, result.size());
     }
 
     @Test
@@ -114,6 +121,24 @@ public class JpaTest {
                 .find(em);
         List<Entity2> result = query.getList();
         assertEquals(1, result.size());
+    }
+
+    @Test
+    public void query5() {
+        Paged<Entity1> query = DataStore.Q.of(Entity1.class)
+                .eq("entries", "key")
+                .find(em, "entries");
+        List<Entity1> result = query.getList();
+        assertEquals("value", result.get(0).getEntries().get("key"));
+    }
+
+    @Test
+    public void query6() {
+        Paged<Entity1> query = DataStore.Q.of(Entity1.class)
+                .eq("strings", "brew")
+                .find(em, "strings", "entries");
+        List<Entity1> result = query.getList();
+        assertEquals("value", result.get(0).getEntries().get("key"));
     }
 
     @Test
@@ -128,9 +153,16 @@ public class JpaTest {
         DataStore.update(em, u);
         assertEquals("update", DataStore.get(em, Entity1.class, 1L).get().getName());
 
-        Paged<Entity1> paged = DataStore.find(em, Entity1.class, "name:test3");
+        Paged<Entity1> paged = DataStore.findAll(em, Entity1.class, "name:test3");
         assertEquals(1, paged.getPage().getNumber());
         DataStore.delete(em, Entity1.class, paged.getList().get(0).getId());
-        assertTrue(DataStore.find(em, Entity1.class,"name:test3").getList().isEmpty());
+        assertTrue(DataStore.findAll(em, Entity1.class,"name:test3").getList().isEmpty());
+    }
+
+    @Test
+    public void list1() {
+        Paged<Entity1> query = DataStore.list(em, Entity1.class, "entity2.entity3s", "strings", "entries");
+        List<Entity1> result = query.getList();
+        assertEquals("oneE2", result.get(0).getEntity2().getName());
     }
 }

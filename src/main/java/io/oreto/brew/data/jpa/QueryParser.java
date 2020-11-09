@@ -1,12 +1,14 @@
 package io.oreto.brew.data.jpa;
 
 import io.oreto.brew.data.Paged;
+import io.oreto.brew.obj.Reflect;
 import io.oreto.brew.str.Str;
 
 import javax.persistence.EntityManager;
 import javax.persistence.criteria.*;
 import javax.persistence.metamodel.Attribute;
 import javax.persistence.metamodel.PluralAttribute;
+import java.lang.reflect.InvocationTargetException;
 import java.sql.Timestamp;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -17,7 +19,6 @@ import java.util.stream.Collectors;
 
 @SuppressWarnings({"unchecked", "rawtypes"})
 public class QueryParser {
-
     static final char QUOTE = '"';
 
     public static class QueryState<T> {
@@ -33,12 +34,33 @@ public class QueryParser {
         CriteriaBuilder cb;
         Root<T> root;
 
-        QueryState(String q, CriteriaBuilder cb, Root<T> root) {
+        QueryState(String q, CriteriaBuilder cb, Root<T> root, String fetch) {
             this.q = q;
             this.cb = cb;
             this.root = root;
             length = q == null ? 0 : q.length();
             str = Str.empty();
+
+            if (Objects.nonNull(fetch) && !fetch.isEmpty()) {
+                String path = fetch;
+                From from = root;
+                path = path.trim();
+                if (!path.isEmpty()) {
+                    if (joins.containsKey(path)) {
+                        joins.get(path);
+                    } else {
+                        String[] fields = path.split("\\.");
+                        for (String field : fields) {
+                            from = (From) from.fetch(field, JoinType.LEFT);
+                        }
+                        joins.put(path, from);
+                    }
+                }
+            }
+        }
+
+        QueryState(String q, CriteriaBuilder cb, Root<T> root) {
+            this(q, cb, root, null);
         }
 
         Stack<String> logical = new Stack<>();
@@ -89,7 +111,6 @@ public class QueryParser {
     public static <T> Predicates parse(QueryState<T> state) {
         Predicates predicates = new Predicates();
         if (state.q == null || state.q.trim().equals("")) {
-            predicates.where = state.cb.conjunction();
             return predicates;
         }
 
@@ -204,7 +225,7 @@ public class QueryParser {
 
         if (predicates.having)
             countQuery.having(predicates.where).distinct(true);
-        else
+        else if(Objects.nonNull(predicates.where))
             countQuery.where(predicates.where);
         return em.createQuery(countQuery).getSingleResult();
     }
@@ -212,20 +233,18 @@ public class QueryParser {
     public static <T> Paged<T> query(String q
             , Paged.Page page
             , EntityManager em
-            , Class<T> entityClass, String... fetch) {
+            , Class<T> entityClass
+            , String... fetch) {
         CriteriaBuilder builder = em.getCriteriaBuilder();
         CriteriaQuery<T> criteriaQuery = builder.createQuery(entityClass);
         Root<T> root = criteriaQuery.from(entityClass);
-        for(String name : fetch) {
-            root.fetch(name);
-        }
 
-        Predicates predicates = parse(new QueryState<T>(q, builder, root));
+        Predicates predicates = parse(new QueryState<T>(q, builder, root, fetch.length > 0 ? fetch[0] : null));
 
         if (predicates.having) {
             predicates.grouping.add(root);
             criteriaQuery.groupBy(predicates.groupBy()).having(predicates.where).distinct(true);
-        } else
+        } else if(Objects.nonNull(predicates.where))
             criteriaQuery.where(predicates.where);
 
         List<Order> orders = page.getSorting().stream()
@@ -240,12 +259,29 @@ public class QueryParser {
                 .setMaxResults(page.getSize())
                 .getResultList();
 
-        return Paged.of(results, page.withCount(count(q, em, entityClass)));
+        if (fetch.length > 1) {
+            for (String f : Arrays.copyOfRange(fetch, 1, fetch.length)) {
+                List<T> fetchResults = query(q
+                        , Paged.Page.of(page.getNumber(), page.getSize()).disableCount(), em, entityClass, f)
+                        .getList();
+
+                for(int i = 0; i < results.size(); i++) {
+                    try {
+                        Reflect.setFieldValue(results.get(i), f, Reflect.getFieldValue(fetchResults.get(i), f));
+                    } catch (IllegalAccessException | NoSuchMethodException | InvocationTargetException | NoSuchFieldException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        }
+
+        return Paged.of(results, page.isCountEnabled() ? page.withCount(count(q, em, entityClass)) : page);
     }
 
     public static <T> Paged<T> query(String q
             , EntityManager em
-            , Class<T> entityClass, String... fetch) {
+            , Class<T> entityClass
+            , String... fetch) {
         return query(q, Paged.Page.of(), em, entityClass, fetch);
     }
 
@@ -294,7 +330,7 @@ public class QueryParser {
                 }
                 if (op.endsWith(PROP)) {
                     prop = true;
-                    op = op.substring(op.indexOf(PROP) + PROP.length());
+                    op = op.substring(0, op.lastIndexOf(PROP));
                 }
                 if (!Operator.isValid(op)) {
                     throw new BadQueryException("Unexpected operator: " + op);
@@ -388,6 +424,24 @@ public class QueryParser {
             return cb.count(path);
         }
 
+        protected From findMapJoin(String property, From from, QueryState<T> state, boolean l) {
+            String[] entry = property.split("\\.");
+            String path = entry[0];
+
+            if (state.joins.containsKey(path)) {
+                from = state.joins.get(path);
+            } else {
+                from = from.join(path, JoinType.LEFT);
+                state.joins.put(path, from);
+            }
+            if (l)
+                key = entry.length > 1 ? entry[1] : "key";
+            else
+                s = entry.length > 1 ? entry[1] : "key";
+
+            return from;
+        }
+
         protected From findJoin(String property, From from, QueryState<T> state, boolean l) {
             Optional<String> attribute = getEntityIdName(property, state.root, state.cb);
             if (attribute.isPresent()) {
@@ -395,6 +449,9 @@ public class QueryParser {
             }
 
             if (property.contains(".")) {
+                if (Map.class.isAssignableFrom(from.get(property.substring(0, property.indexOf('.'))).getJavaType())) {
+                    return findMapJoin(property, from, state, l);
+                }
                 String path = property.substring(0, property.lastIndexOf('.'));
                 String[] fields = property.split("\\.");
 
@@ -411,6 +468,16 @@ public class QueryParser {
                     key = fields[fields.length - 1];
                 else
                     s = fields[fields.length - 1];
+            } else if (Map.class.isAssignableFrom(from.get(property).getJavaType())) {
+                from = findMapJoin(property, from, state, l);
+            }
+            else if (Collection.class.isAssignableFrom(from.get(property).getJavaType())) {
+                if (state.joins.containsKey(property)) {
+                    from = state.joins.get(property);
+                } else {
+                    from = from.join(property, JoinType.LEFT);
+                    state.joins.put(property, from);
+                }
             }
 
             return from;
@@ -439,26 +506,41 @@ public class QueryParser {
                     : Optional.empty();
         }
 
+        protected Path assignPath(From from, String prop) {
+            if (from instanceof MapJoin){
+                MapJoin<?, ?, ?> mapJoin = ((MapJoin<?, ?, ?>) from);
+                return prop.equals("key") ? mapJoin.key() : mapJoin.value();
+            } else if (from instanceof Join
+                    && ((Join<?, ?>) from).getAttribute().getPersistentAttributeType().name().equals("ELEMENT_COLLECTION")) {
+                return from;
+            } else {
+                return from.get(prop);
+            }
+        }
+
         public Predicate apply(QueryState state) {
             Root root = state.root;
             CriteriaBuilder cb = state.cb;
             Predicate predicate;
             try {
-                From l = findJoin(key, root, state, true);
-                From r = prop ? findJoin(s, root, state, false) : root;
+                if (key == null || key.isEmpty()) {
+                    key = root.getModel().getId(root.getModel().getIdType().getJavaType()).getName();
+                }
+                From l = findJoin(key, state.root, state, true);
+                From r = prop ? findJoin(s, state.root, state, false) : root;
 
+                p1 = assignPath(l, key);
                 if (!prop)
-                    setValue(l.get(key));
+                    setValue(p1);
 
-                p1 = l.get(key);
-                p2 = prop ? r.get(s) : null;
+                p2 = prop ? assignPath(r, s) : null;
                 javax.persistence.criteria.Expression exp1 = f1 == null ? p1 : applyFunction(f1, p1, cb);
                 javax.persistence.criteria.Expression exp2 = f2 == null ? p2 : applyFunction(f2, p2, cb);
 
                 switch (operator) {
                     case eq:
                         predicate = prop
-                                ? cb.equal(exp1, cb.nullif(exp2, ""))
+                                ? cb.equal(exp1, cb.nullif(exp2, value instanceof Number ? cb.sum(exp2, 1) : ""))
                                 : cb.equal(exp1, value);
                         break;
                     case lt:

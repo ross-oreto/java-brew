@@ -1,5 +1,7 @@
 package io.oreto.brew.data;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -46,10 +48,13 @@ public class Paged<T> {
         private int number;
         private int offset;
         private int size;
-        private long count;
-        private int pages;
+        private Long count;
+        private Integer pages;
         private List<Sort> sorting;
         private boolean zeroBased;
+
+        @JsonIgnore
+        boolean countEnabled = true;
 
         protected Page(int number, int size, long count, int pages, List<String> sorting) {
             this.size = size;
@@ -59,13 +64,15 @@ public class Paged<T> {
             this.sorting = Sort.of(sorting);
         }
 
-        protected Page(int number, int size) {
+        public Page() {}
+
+        public Page(int number, int size) {
             this.size = size;
             setNumber(number);
             this.sorting = new ArrayList<>();
         }
 
-        protected Page(int number, int size, List<String> sorting) {
+        public Page(int number, int size, List<String> sorting) {
             this.size = size;
             setNumber(number);
             this.sorting = Sort.of(sorting);
@@ -92,6 +99,15 @@ public class Paged<T> {
             this.count = count;
             this.pages = (count / size) + count % size > 0 ? 1 : 0;
             return this;
+        }
+
+        public Page disableCount() {
+            this.countEnabled = false;
+            return this;
+        }
+
+        public boolean isCountEnabled() {
+            return countEnabled;
         }
 
         public Page withOffset(int offset) {

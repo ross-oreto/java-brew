@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.MappingIterator;
@@ -15,12 +16,13 @@ import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.fasterxml.jackson.module.afterburner.AfterburnerModule;
 import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
+import io.oreto.brew.io;
 
+import javax.persistence.EntityManager;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import io.oreto.brew.io;
 
 public class JSON {
 
@@ -42,6 +44,11 @@ public class JSON {
 
     public static ObjectMapper mapper = mapper();
 
+    public static ObjectMapper jpa(EntityManager entityManager) {
+        mapper.setSerializerFactory(new JpaSerializer(entityManager));
+        return mapper;
+    }
+
     public static String asString(Object o, ObjectMapper mapper) {
         try {
             return mapper.writeValueAsString(o);
@@ -62,6 +69,17 @@ public class JSON {
             e.printStackTrace();
         }
         return null;
+    }
+    public static Map<String, Object> asMap(String s) {
+        try {
+            return mapper().readValue(s, new TypeReference<Map<String, Object>>() {});
+        } catch (JsonProcessingException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+    public static Map<String, Object> asMap(Object o) {
+        return mapper().convertValue(o, new TypeReference<Map<String, Object>>() {});
     }
 
     public static <T> T from(Map<String, ?> o, Class<T> tClass) {
