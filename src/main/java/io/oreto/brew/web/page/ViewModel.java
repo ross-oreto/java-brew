@@ -86,13 +86,13 @@ public class ViewModel extends Page {
 
     public ViewModel withData(Class<?> cls) {
         return withData(Reflect.getAllFields(cls).stream()
-                .filter(field -> !field.getName().startsWith("_"))
+                .filter(field -> Reflect.getGetter(field, cls).isPresent())
                 .map(java.lang.reflect.Field::getName).collect(Collectors.toList()));
     }
 
     public ViewModel withData(Object o) {
-        for (java.lang.reflect.Field field : Reflect.getAllFields(o.getClass())) {
-            if (!field.getName().startsWith("_")) {
+        for (java.lang.reflect.Field field : Reflect.getAllFields(o)) {
+            if (Reflect.getGetter(field, o).isPresent()) {
                 try {
                     withData(field.getName(), Reflect.getFieldValue(o, field));
                 } catch (Exception e) {

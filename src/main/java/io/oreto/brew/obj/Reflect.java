@@ -1,5 +1,6 @@
 package io.oreto.brew.obj;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.oreto.brew.collections.Lists;
 import io.oreto.brew.str.Str;
 
@@ -12,25 +13,109 @@ import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 public class Reflect {
-    private static List<Field> getAllFields(Class<?> aClass, List<Field> fields) {
+
+    public static class Allow {
+        public static Allow none() {
+            return new Allow();
+        }
+
+        public static Allow all() {
+            return none()
+                    .allowTransient()
+                    .allowStatic()
+                    .allowFinal()
+                    .allowJsonIgnore()
+                    .allowUnderscore();
+        }
+
+        boolean trans;
+        boolean _static;
+        boolean _final;
+        boolean underscore;
+        boolean jsonIgnore = true;
+
+        public Allow allowTransient() {
+            trans = true;
+            return this;
+        }
+
+        public Allow allowStatic() {
+            _static = true;
+            return this;
+        }
+
+        public Allow allowFinal() {
+            _final = true;
+            return this;
+        }
+
+        public Allow allowJsonIgnore() {
+            jsonIgnore = true;
+            return this;
+        }
+
+        public Allow allowUnderscore() {
+            underscore = true;
+            return this;
+        }
+
+        public Allow ignoreTransient() {
+            trans = false;
+            return this;
+        }
+
+        public Allow ignoreStatic() {
+            _static = false;
+            return this;
+        }
+
+        public Allow ignoreFinal() {
+            _final = false;
+            return this;
+        }
+
+        public Allow ignoreJsonIgnore() {
+            jsonIgnore = false;
+            return this;
+        }
+
+        public Allow ignoreUnderscore() {
+            underscore = false;
+            return this;
+        }
+    }
+
+    private static List<Field> getAllFields(Class<?> aClass, List<Field> fields, Allow allow) {
         fields.addAll(
                 Arrays.stream(aClass.getDeclaredFields())
-                        .filter(it -> !Modifier.isTransient(it.getModifiers())
-                                && !Modifier.isStatic(it.getModifiers())
-                                && !Modifier.isFinal(it.getModifiers())
-                                && !it.getName().startsWith("_"))
+                        .filter(it -> allow.trans || !Modifier.isTransient(it.getModifiers()))
+                        .filter(it -> allow._static || !Modifier.isStatic(it.getModifiers()))
+                        .filter(it -> allow._final || !Modifier.isFinal(it.getModifiers()))
+                        .filter(it -> allow.jsonIgnore || !it.isAnnotationPresent(JsonIgnore.class))
+                        .filter(it -> allow.underscore || !it.getName().startsWith("_"))
                         .collect(Collectors.toList())
         );
 
         if (aClass.getSuperclass() != null) {
-            getAllFields(aClass.getSuperclass(), fields);
+            getAllFields(aClass.getSuperclass(), fields, allow);
         }
 
         return fields;
     }
 
+    private static List<Field> getAllFields(Class<?> aClass, List<Field> fields) {
+        return getAllFields(aClass, fields, Allow.none());
+    }
+
+    public static List<Field> getAllFields(Class<?> aClass, Allow ignore) {
+        return getAllFields(aClass, new ArrayList<>(), ignore);
+    }
     public static List<Field> getAllFields(Class<?> aClass) {
         return getAllFields(aClass, new ArrayList<>());
+    }
+
+    public static List<Field> getAllFields(Object o, Allow ignore) {
+        return getAllFields(o.getClass(), new ArrayList<>(), ignore);
     }
     public static List<Field> getAllFields(Object o) {
         return getAllFields(o.getClass(), new ArrayList<>());
@@ -72,8 +157,8 @@ public class Reflect {
                 cls.getSimpleName().toLowerCase().startsWith(method.getSimpleName()));
     }
 
-    public static Optional<Method> getGetter(Field field, Object o) {
-        for (Method method : o.getClass().getMethods()) {
+    public static Optional<Method> getGetter(Field field, Class<?> cls) {
+        for (Method method : cls.getMethods()) {
             if (method.getParameterCount() == 0 && methodTypeMatches(method.getReturnType(), field.getType())) {
                 String fieldName = Str.capitalize(field.getName());
                 if (method.getName().equals(String.format("get%s", fieldName))
@@ -85,6 +170,13 @@ public class Reflect {
         return Optional.empty();
     }
 
+    public static Optional<Method> getGetter(Field field, Object o) {
+        return getGetter(field, o.getClass());
+    }
+
+    public static Optional<Method> getGetter(String name, Class<?> cls) {
+        return getField(cls, name).flatMap(value -> getGetter(value, cls));
+    }
     public static Optional<Method> getGetter(String name, Object o) {
         return getField(o, name).flatMap(value -> getGetter(value, o));
     }
@@ -94,8 +186,8 @@ public class Reflect {
         return getFieldValue(o, getField(o, field).orElseThrow(() -> new NoSuchFieldException("no such field " + field)));
     }
 
-    public static Optional<Method> getSetter(Field field, Object o) {
-        for (Method method : o.getClass().getMethods()) {
+    public static Optional<Method> getSetter(Field field, Class<?> cls) {
+        for (Method method : cls.getMethods()) {
             Class<?> param = method.getParameterCount() == 1 ? method.getParameterTypes()[0] : null;
 
             if (Objects.nonNull(param)) {
@@ -114,8 +206,16 @@ public class Reflect {
         return Optional.empty();
     }
 
+    public static Optional<Method> getSetter(Field field, Object o) {
+        return getSetter(field, o.getClass());
+    }
+
     public static Optional<Method> getSetter(String name, Object o) {
         return getField(o, name).flatMap(value -> getSetter(value, o));
+    }
+
+    public static Optional<Method> getSetter(String name, Class<?> cls) {
+        return getField(cls, name).flatMap(value -> getSetter(value, cls));
     }
 
     public static void setFieldValue(Object o, Field field, Object value)
@@ -142,7 +242,7 @@ public class Reflect {
             throws InvocationTargetException, NoSuchMethodException, IllegalAccessException {
         Set<String> nameSet = StreamSupport.stream(names.spliterator(), false).collect(Collectors.toSet());
 
-        Iterable<Field> iterable = names.iterator().hasNext() ? getAllFields(o1).stream()
+        Iterable<Field> iterable = names.iterator().hasNext() ? getAllFields(o1, copyOptions.ignore).stream()
                 .filter(it -> isFieldPublic(it) || (getSetter(it, o1).isPresent() && getGetter(it, o1).isPresent()))
                     .filter(it -> copyOptions.exclusion != nameSet.contains(it.getName()))
                     .collect(Collectors.toSet())
@@ -191,7 +291,7 @@ public class Reflect {
     public static void copy(Object o1, Map<String, Object> values, CopyOptions copyOptions)
             throws InvocationTargetException, NoSuchMethodException, IllegalAccessException {
 
-        Iterable<Field> iterable = getAllFields(o1).stream()
+        Iterable<Field> iterable = getAllFields(o1, copyOptions.ignore).stream()
                 .filter(it -> isFieldPublic(it) || (getSetter(it, o1).isPresent() && getGetter(it, o1).isPresent()))
                 .filter(it -> copyOptions.exclusion != values.containsKey(it.getName()))
                 .collect(Collectors.toSet());
@@ -226,8 +326,11 @@ public class Reflect {
         private boolean nullsOnly;
         private boolean mergeCollections;
         private boolean exclusion;
+        private Allow ignore;
 
-        protected CopyOptions(){}
+        protected CopyOptions(){
+            ignore = Allow.none();
+        }
 
         public CopyOptions nullsOnly() {
             nullsOnly = true;
@@ -241,6 +344,11 @@ public class Reflect {
 
         public CopyOptions exclusion() {
             exclusion = true;
+            return this;
+        }
+
+        public CopyOptions ignoring(Allow ignore) {
+            this.ignore = ignore;
             return this;
         }
     }

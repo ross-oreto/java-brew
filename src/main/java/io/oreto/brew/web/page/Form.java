@@ -149,7 +149,7 @@ public class Form<T> implements Notifiable, Validatable<T> {
 
     public Form<T> withField(Class<T> cls) {
         for (java.lang.reflect.Field field : Reflect.getAllFields(cls)) {
-            if (!field.getName().startsWith("_")) {
+            if (Reflect.getSetter(field, cls).isPresent()) {
                 Field formField = Field.of(field, this.name);
                 fields.add(formField);
             }
