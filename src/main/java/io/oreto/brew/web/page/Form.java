@@ -1,10 +1,12 @@
 package io.oreto.brew.web.page;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import io.oreto.brew.collections.Lists;
 import io.oreto.brew.obj.Reflect;
 import io.oreto.brew.str.Str;
 import io.oreto.brew.web.page.constants.C;
 
+import javax.persistence.GeneratedValue;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -17,7 +19,7 @@ import java.util.stream.Collectors;
 public class Form<T> implements Notifiable, Validatable<T> {
 
     public static <T> Form<T> of(Class<T> cls) {
-        return new Form<T>(cls.getSimpleName()).withField(cls);
+        return new Form<T>(cls.getSimpleName()).withFields(cls);
     }
 
     public static <T> Form<T> of(String name) {
@@ -147,14 +149,60 @@ public class Form<T> implements Notifiable, Validatable<T> {
         return !isValid();
     }
 
-    public Form<T> withField(Class<T> cls) {
-        for (java.lang.reflect.Field field : Reflect.getAllFields(cls)) {
-            if (Reflect.getSetter(field, cls).isPresent()) {
+    public static class Admit {
+        public static Admit exclude(String... names) {
+            return new Admit(false, names);
+        }
+
+        public static Admit include(String... names) {
+            return new Admit(true, names);
+        }
+
+        protected Admit(boolean include, String... names) {
+            this.include = include;
+            this.names = names;
+        }
+
+        boolean include;
+        String[] names;
+    }
+
+    public Form<T> withFields(Class<T> cls, Admit admit) {
+        List<String> exclusions = Lists.of(admit.names);
+        Iterable<java.lang.reflect.Field> allFields = admit.names.length == 0
+                ? Reflect.getAllFields(cls)
+                : Reflect.getAllFields(cls).stream()
+                .filter(it -> admit.include == exclusions.contains(it.getName()))
+                .collect(Collectors.toSet());
+
+        for (java.lang.reflect.Field field : allFields) {
+            if (Reflect.getSetter(field, cls).isPresent() && !field.isAnnotationPresent(GeneratedValue.class)) {
                 Field formField = Field.of(field, this.name);
+                if (field.getGenericType().getTypeName().contains("<")) {
+                    String[] types = field.getGenericType().getTypeName().split("<");
+                    if (types[1].contains(",")) {
+                        String[] map = types[1].split(",");
+                        String k = map[0].substring(map[0].lastIndexOf('.') + 1);
+                        String v = map[1].substring(map[1].lastIndexOf('.') + 1);
+                        formField.withDescription(String.format("%s<%s,%s"
+                                , types[0].substring(types[0].lastIndexOf('.') + 1), k, v));
+                    } else {
+                        formField.withDescription(String.format("%s<%s"
+                                , types[0].substring(types[0].lastIndexOf('.') + 1)
+                                , types[1].substring(types[1].lastIndexOf('.') + 1)));
+                    }
+                } else {
+                    String types = field.getGenericType().getTypeName();
+                    formField.withDescription(types.substring(types.lastIndexOf('.') + 1));
+                }
                 fields.add(formField);
             }
         }
         return this;
+    }
+
+    public Form<T> withFields(Class<T> cls) {
+        return withFields(cls, Admit.include());
     }
 
     public Form<T> withField(String name, String type) {

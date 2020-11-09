@@ -110,7 +110,7 @@ public class ViewModel extends Page {
 
     public <T> ViewModel withForm(String name, Class<T> cls) {
         Form<T> form = Form(name);
-        this.getForms().add(form.withField(cls));
+        this.getForms().add(form.withFields(cls));
         return this;
     }
 
@@ -122,7 +122,7 @@ public class ViewModel extends Page {
 
     public <T> ViewModel withForm(String name, Class<T> cls, Consumer<Form<T>> formConsumer) {
         Form<T> form = Form(name);
-        this.getForms().add(form.withField(cls));
+        this.getForms().add(form.withFields(cls));
         formConsumer.accept(form);
         return this;
     }
@@ -154,7 +154,7 @@ public class ViewModel extends Page {
 
     public <T> Form<T> FormWithFields(String name, Class<T> tClass) {
         Form<T> newForm = Form(name);
-        newForm.withField(tClass);
+        newForm.withFields(tClass);
         getForms().add(newForm);
         return newForm;
     }
