@@ -33,6 +33,7 @@ public class JpaTest {
     private static boolean setup;
 
     @Resource private EntityManagerFactory entityManagerFactory;
+    @Resource private EntityManager entityManager;
     @Resource private Entity1Repository entity1Repository;
     @Resource private Entity2Repository entity2Repository;
     @Resource private Entity3Repository entity3Repository;
@@ -41,7 +42,8 @@ public class JpaTest {
     public void setup() {
         if (!setup) {
             setup = true;
-            em = entityManagerFactory.createEntityManager();
+            //em = entityManagerFactory.createEntityManager();
+            em = entityManager;
             DataStore.save(em,
                     new Entity1("test")
                             .withStrings("test", "ing", "io", "oreto", "brew", "key")

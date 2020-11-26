@@ -72,11 +72,19 @@ public class DataStore {
         return findOne(entityManager, entityClass, q, Paged.Page.of(), fetch);
     }
 
+    public static EntityTransaction tryTransaction(EntityManager entityManager) {
+        try {
+            return entityManager.isJoinedToTransaction() ? null : entityManager.getTransaction();
+        } catch (IllegalStateException ignored){ }
+        return null;
+    }
+
     @SuppressWarnings("unchecked")
     public static <T> T save(EntityManager entityManager, T t, String... fetch) {
-        EntityTransaction trx = entityManager.getTransaction();
+        EntityTransaction trx = tryTransaction(entityManager);
+
         try {
-            if (trx.isActive())
+            if (trx == null || trx.isActive())
                 entityManager.persist(t);
             else {
                 trx.begin();
@@ -89,17 +97,16 @@ public class DataStore {
                     , entityManager.getEntityManagerFactory().getPersistenceUnitUtil().getIdentifier(t)
                     , fetch).orElse(null);
         } catch(Exception x) {
-            trx.rollback();
+            if (Objects.nonNull(trx)) trx.rollback();
             throw x;
         }
     }
 
     public static <ID, T> Optional<T> get(EntityManager entityManager, Class<T> entityClass, ID id, String... fetch) {
-        EntityTransaction trx = entityManager.getTransaction();
+        EntityTransaction trx = tryTransaction(entityManager);
         try {
             Optional<T> t;
-
-            if (trx.isActive())
+            if (trx == null || trx.isActive())
                 t = DataStore.findOne(entityManager, entityClass, String.format(":%s", id), fetch);
             else {
                 trx.begin();
@@ -108,17 +115,17 @@ public class DataStore {
             }
             return t;
         } catch (Exception x) {
-            trx.rollback();
+            if (Objects.nonNull(trx)) trx.rollback();
             throw x;
         }
     }
 
     @SuppressWarnings("unchecked")
     public static <T> T update(EntityManager entityManager, T t, String... fetch) {
-        EntityTransaction trx = entityManager.getTransaction();
+        EntityTransaction trx = tryTransaction(entityManager);
         try {
             T entity;
-            if (trx.isActive())
+            if (trx == null || trx.isActive())
                 entity = entityManager.merge(t);
             else {
                 trx.begin();
@@ -131,16 +138,16 @@ public class DataStore {
                     , entityManager.getEntityManagerFactory().getPersistenceUnitUtil().getIdentifier(entity)
                     , fetch).orElse(null);
         } catch(Exception x) {
-            trx.rollback();
+            if (Objects.nonNull(trx)) trx.rollback();
             throw x;
         }
     }
 
     public static <ID, T> T delete(EntityManager entityManager, Class<T> entityClass, ID id) {
-        EntityTransaction trx = entityManager.getTransaction();
+        EntityTransaction trx = tryTransaction(entityManager);
         try {
             Optional<T> t;
-            if (trx.isActive()) {
+            if (trx == null || trx.isActive())  {
                 t = get(entityManager, entityClass, id);
                 entityManager.remove(t.orElseThrow(EntityNotFoundException::new));
             } else {
@@ -151,7 +158,7 @@ public class DataStore {
             }
             return t.get();
         } catch(Exception x) {
-            trx.rollback();
+            if (Objects.nonNull(trx)) trx.rollback();
             throw x;
         }
     }
