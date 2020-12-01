@@ -1,16 +1,15 @@
 package io.oreto.brew.web.page;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import io.oreto.brew.Bean;
 import io.oreto.brew.collections.Lists;
 import io.oreto.brew.obj.Reflect;
 import io.oreto.brew.str.Str;
 import io.oreto.brew.web.page.constants.C;
 
 import javax.persistence.GeneratedValue;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import java.util.ResourceBundle;
+import javax.validation.ConstraintViolation;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -33,6 +32,7 @@ public class Form<T> implements Notifiable, Validatable<T> {
     protected boolean valid = true;
     public @JsonIgnore FormValidators<T> validation;
     protected List<Notification> notifications = new ArrayList<>();
+    protected Locale locale;
 
     protected Form(String name) {
         this.name = Str.toCamel(name);
@@ -49,6 +49,7 @@ public class Form<T> implements Notifiable, Validatable<T> {
     }
 
     public Form<T> withData(T data) { this.data = data; return this; }
+    public Form<T> withLocale(Locale locale) { this.locale = locale; return this; }
 
     public Form<T> withValidator(Function<Form<T>, Notification> validator) {
         this.validators.add(validator);
@@ -82,7 +83,15 @@ public class Form<T> implements Notifiable, Validatable<T> {
     }
 
     @SuppressWarnings("unchecked")
-    public Form<T> validate() {
+    public Form<T> validate(Locale locale) {
+        Set<ConstraintViolation<T>> violations = Bean.validate(locale, data);
+        for (ConstraintViolation<T> violation : violations) {
+            Error error = new Error(violation.getPropertyPath().toString()
+                    , violation.getInvalidValue()
+                    , violation.getMessage()).markLocalized();
+            withError(error);
+        }
+
         if (data instanceof Validatable) {
             validators.addAll(((Validatable<T>) data).validators());
         }
@@ -95,22 +104,28 @@ public class Form<T> implements Notifiable, Validatable<T> {
                 notifications.add(result);
             }
         }
+        if (Objects.nonNull(locale))
+            localize(locale);
         return this;
     }
 
+    public Form<T> validate() {
+       return validate(this.locale);
+    }
+
     public boolean submit() {
-        return validate().isValid();
+        return validate(locale).isValid();
     }
 
     public Form<T> submit(Consumer<Form<T>> success) {
-        if (validate().isValid()){
+        if (validate(locale).isValid()){
             success.accept(this);
         }
         return this;
     }
 
     public Form<T> submit(Consumer<Form<T>> success, Consumer<Form<T>> failure) {
-        if (validate().isValid()) {
+        if (validate(locale).isValid()) {
             success.accept(this);
         } else {
             failure.accept(this);
@@ -277,6 +292,10 @@ public class Form<T> implements Notifiable, Validatable<T> {
         return this;
     }
 
+    public Form<T> localize() {
+        return localize(locale == null ? Locale.US : locale);
+    }
+
     static public class Valid extends Notification {
         public Valid(String name) {
             super();
@@ -305,6 +324,18 @@ public class Form<T> implements Notifiable, Validatable<T> {
         }
         public void setInvalidValue(Object invalidValue) {
             this.invalidValue = invalidValue;
+        }
+
+        @Override
+        public Error markLocalized() {
+             super.markLocalized();
+             return this;
+        }
+
+        @Override
+        public Error withArgs(String... args) {
+            super.withArgs(args);
+            return this;
         }
     }
 }

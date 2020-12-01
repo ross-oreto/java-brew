@@ -1,10 +1,12 @@
 package io.oreto.brew.data.jpa.repo;
 
+import io.oreto.brew.data.Model;
+
 import javax.persistence.*;
 import java.util.List;
 
 @Entity
-public class Entity2 {
+public class Entity2 implements Model<Long> {
 
     @Id @GeneratedValue(strategy = GenerationType.AUTO)
     private Long id;

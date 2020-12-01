@@ -195,6 +195,7 @@ public class ViewModel extends Page {
     }
 
     public ViewModel localize() {
+        Locale locale = this.locale == null ? Locale.US : this.locale;
         notifications.forEach(it -> it.localize(locale));
         getForms().forEach(it -> it.localize(locale));
         return this;

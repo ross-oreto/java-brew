@@ -51,6 +51,7 @@ public class Field {
     private String property;
     private String description;
     private Map<String, String> attributes = new HashMap<>();
+    private boolean localized;
 
     @Override
     public String toString() {
@@ -62,7 +63,14 @@ public class Field {
     }
 
     public Field localize(Locale locale) {
-        return withDescription(toString(locale));
+        if (localized) return this;
+        withDescription(toString(locale));
+        localized = true;
+        return this;
+    }
+
+    public Field localize() {
+        return localize(Locale.US);
     }
 
     public String getName() {

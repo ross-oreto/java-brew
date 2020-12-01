@@ -1,12 +1,13 @@
 package io.oreto.brew.data.jpa;
 
 import io.oreto.brew.data.Crud;
+import io.oreto.brew.data.Model;
 import io.oreto.brew.data.Paged;
 
 import javax.persistence.EntityManager;
 import java.util.Optional;
 
-public interface Store<ID, T> extends Crud<ID, T> {
+public interface Store<ID, T extends Model<ID>> extends Crud<ID, T> {
     EntityManager getEntityManager();
     Class<T> getEntityClass();
 

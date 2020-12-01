@@ -10,6 +10,7 @@ public class Notification {
     protected String name;
     protected String message;
     protected Type type;
+    private boolean localized;
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     protected String[] args;
@@ -84,12 +85,22 @@ public class Notification {
         return this;
     }
 
+    public Notification markLocalized() {
+        this.localized = true;
+        return this;
+    }
+
     public String toString(Locale locale) {
         return Page.I18n(ResourceBundle.getBundle(C.messages, locale), message, (Object[]) args).orElse(message);
     }
 
     public Notification localize(Locale locale) {
-        return withMessage(toString(locale));
+        if (localized) return this;
+        return withMessage(toString(locale)).markLocalized();
+    }
+
+    public Notification localize() {
+      return localize(Locale.US);
     }
 
     @Override

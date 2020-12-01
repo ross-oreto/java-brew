@@ -3,6 +3,8 @@ package io.oreto.brew.data.jpa;
 import io.oreto.brew.collections.Lists;
 import io.oreto.brew.data.Paged;
 import io.oreto.brew.data.jpa.repo.*;
+import io.oreto.brew.web.rest.RestResponse;
+import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
@@ -15,9 +17,9 @@ import org.springframework.test.context.support.AnnotationConfigContextLoader;
 import javax.annotation.Resource;
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
-import javax.transaction.Transactional;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -26,46 +28,46 @@ import static org.junit.Assert.assertTrue;
 @ContextConfiguration(
         classes = { JpaConfig.class },
         loader = AnnotationConfigContextLoader.class)
-@Transactional
 @Rollback(false)
 public class JpaTest {
     private static EntityManager em;
-    private static boolean setup;
 
     @Resource private EntityManagerFactory entityManagerFactory;
-    @Resource private EntityManager entityManager;
-    @Resource private Entity1Repository entity1Repository;
-    @Resource private Entity2Repository entity2Repository;
-    @Resource private Entity3Repository entity3Repository;
 
     @Before
     public void setup() {
-        if (!setup) {
-            setup = true;
-            //em = entityManagerFactory.createEntityManager();
-            em = entityManager;
-            DataStore.save(em,
-                    new Entity1("test")
-                            .withStrings("test", "ing", "io", "oreto", "brew", "key")
-                            .withEntries(new HashMap<String, String>(){{
-                                put("key", "value");
-                            }})
-                            .withEntity2(new Entity2("oneE2").withEntity3(new Entity3("e2e3a")))
-                            .withEntity2s(Lists.of(
-                                    new Entity2("e1")
-                                            .withEntity3(new Entity3("oneE3"))
-                                            .withEntity3s(Lists.of(new Entity3("e3"), new Entity3("e03")))
-                                    , new Entity2("e4")
-                                            .withEntity3s(Lists.of(new Entity3("e5")))
-                                    , new Entity2("e2"))
-                            )
-            );
+        em = entityManagerFactory.createEntityManager();
+        DataStore.save(em,
+                new Entity1("test")
+                        .withCreatedBy("me")
+                        .withStrings("test", "ing", "io", "oreto", "brew", "key")
+                        .withEntries(new HashMap<String, String>() {{
+                            put("key", "value");
+                        }})
+                        .withEntity2(new Entity2("oneE2").withEntity3(new Entity3("e2e3a")))
+                        .withEntity2s(Lists.of(
+                                new Entity2("e1")
+                                        .withEntity3(new Entity3("oneE3"))
+                                        .withEntity3s(Lists.of(new Entity3("e3"), new Entity3("e03")))
+                                , new Entity2("e4")
+                                        .withEntity3s(Lists.of(new Entity3("e5")))
+                                , new Entity2("e2"))
+                        )
+        );
 
-            DataStore.save(em,
-                    new Entity1("test2")
-                            .withEntity2s(Lists.of(new Entity2("ee")))
-            );
-        }
+        DataStore.save(em,
+                new Entity1("test2").withCreatedBy("Tyson")
+                        .withEntity2s(Lists.of(new Entity2("ee")))
+        );
+
+        DataStore.save(em, new Entity4(new Entity4.CompId(1, "abc"), "t1"));
+        DataStore.save(em, new Entity4(new Entity4.CompId(2, "d"), "t1"));
+    }
+
+    @After
+    public void reset() {
+        DataStore.deleteAll(em, Entity1.class);
+        DataStore.deleteAll(em, Entity4.class);
     }
 
     @AfterClass
@@ -146,14 +148,15 @@ public class JpaTest {
     @Test
     public void crud() {
         DataStore.save(em,
-            new Entity1("test3").withEntity2s(Lists.of(new Entity2("e20")))
+            new Entity1("test3").withCreatedBy("Link").withEntity2s(Lists.of(new Entity2("e20")))
         );
 
-        Entity1 u = DataStore.get(em, Entity1.class,1L).orElse(null);
+        Entity1 u = DataStore.findOne(em, Entity1.class, "").orElse(null);
         assert u != null;
+        Long id = u.getId();
         u.setName("update");
         DataStore.update(em, u);
-        assertEquals("update", DataStore.get(em, Entity1.class, 1L).get().getName());
+        assertEquals("update", DataStore.get(em, Entity1.class, id).get().getName());
 
         Paged<Entity1> paged = DataStore.findAll(em, Entity1.class, "name:test3");
         assertEquals(1, paged.getPage().getNumber());
@@ -166,5 +169,30 @@ public class JpaTest {
         Paged<Entity1> query = DataStore.list(em, Entity1.class, "entity2.entity3s", "strings", "entries");
         List<Entity1> result = query.getList();
         assertEquals("oneE2", result.get(0).getEntity2().getName());
+    }
+
+    @Test
+    public void restTest1() {
+        Entity1Store entity1Store = new Entity1Store(entityManagerFactory.createEntityManager());
+        RestResponse<Entity1> result;
+
+        result = entity1Store.replace(1L, new Entity1("update"));
+        assertEquals(true, result.isOk());
+        assertEquals("update", result.getBody().getName());
+        assertEquals("me", result.getBody().getCreatedBy());
+
+        result = entity1Store.update(result.getBody().withName("test"));
+        assertEquals(true, result.isOk());
+        assertEquals("test", result.getBody().getName());
+        assertEquals("me", result.getBody().getCreatedBy());
+
+        assertEquals( new Long(2), DataStore.count(em, Entity1.class));
+    }
+
+    @Test
+    public void idTest() {
+       Optional<Entity4> entity4 = DataStore.get(em, Entity4.class, Entity4.CompId.of(1, "abc"));
+       assertTrue(entity4.isPresent());
+       assertEquals("t1", entity4.get().getTest());
     }
 }

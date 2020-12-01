@@ -1,16 +1,26 @@
 package io.oreto.brew.data.jpa;
 
 import io.oreto.brew.data.Paged;
+import io.oreto.brew.obj.Reflect;
 import io.oreto.brew.str.Str;
 
-import javax.persistence.EntityManager;
-import javax.persistence.EntityNotFoundException;
-import javax.persistence.EntityTransaction;
+import javax.persistence.*;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.Optional;
 
 public class DataStore {
+
+    public static <T> Long count(EntityManager entityManager, Class<T> entityClass, String q) {
+        return QueryParser.count(q, entityManager, entityClass);
+    }
+
+    public static <T> Long count(EntityManager entityManager, Class<T> entityClass) {
+        return count(entityManager, entityClass, "");
+    }
+
     public static <T> Paged<T> findAll(EntityManager entityManager
             , Class<T> entityClass
             , String q
@@ -58,11 +68,11 @@ public class DataStore {
             , Paged.Page page
             , String... fetch) {
         Paged<T> list = QueryParser.query(q
-                , page
+                , page.disableCount()
                 , entityManager
                 , entityClass
                 , fetch);
-        return list.getPage().getCount() > 0 ? Optional.of(list.getList().get(0)) : Optional.empty();
+        return list.getList().size() > 0 ? Optional.of(list.getList().get(0)) : Optional.empty();
     }
 
     public static <T> Optional<T> findOne(EntityManager entityManager
@@ -74,7 +84,7 @@ public class DataStore {
 
     public static EntityTransaction tryTransaction(EntityManager entityManager) {
         try {
-            return entityManager.isJoinedToTransaction() ? null : entityManager.getTransaction();
+            return entityManager.getTransaction();
         } catch (IllegalStateException ignored){ }
         return null;
     }
@@ -84,18 +94,21 @@ public class DataStore {
         EntityTransaction trx = tryTransaction(entityManager);
 
         try {
-            if (trx == null || trx.isActive())
+            if (trx == null || trx.isActive()) {
                 entityManager.persist(t);
+            }
             else {
                 trx.begin();
                 entityManager.persist(t);
                 trx.commit();
             }
-            return fetch.length == 0 ? t
+
+            T entity = fetch.length == 0 ? t
                     : (T) get(entityManager
                     , t.getClass()
                     , entityManager.getEntityManagerFactory().getPersistenceUnitUtil().getIdentifier(t)
                     , fetch).orElse(null);
+            return entity;
         } catch(Exception x) {
             if (Objects.nonNull(trx)) trx.rollback();
             throw x;
@@ -105,12 +118,37 @@ public class DataStore {
     public static <ID, T> Optional<T> get(EntityManager entityManager, Class<T> entityClass, ID id, String... fetch) {
         EntityTransaction trx = tryTransaction(entityManager);
         try {
+            String query = String.format(":%s", id);
+
+            if (id.getClass().isAnnotationPresent(Embeddable.class) ||
+                    id.getClass().isAnnotationPresent(IdClass.class)) {
+                Q<?> q = Q.of(id.getClass());
+
+                String idRef = "";
+                if (id.getClass().isAnnotationPresent(Embeddable.class)) {
+                    Optional<Field> idField =
+                            Reflect.getAllFields(entityClass).stream()
+                                    .filter(it -> it.isAnnotationPresent(EmbeddedId.class))
+                                    .findFirst();
+                    idRef = idField.isPresent() ? String.format("%s.", idField.get().getName()) : "";
+                }
+                String finalIdRef = idRef;
+                Reflect.getAllFields(id.getClass()).forEach(it -> {
+                    try {
+                        q.eq(String.format("%s%s", finalIdRef, it.getName()), Reflect.getFieldValue(id, it));
+                    } catch (IllegalAccessException | NoSuchMethodException | InvocationTargetException e) {
+                        e.printStackTrace();
+                    }
+                });
+                query = q.toString();
+            }
+
             Optional<T> t;
             if (trx == null || trx.isActive())
-                t = DataStore.findOne(entityManager, entityClass, String.format(":%s", id), fetch);
+                t = DataStore.findOne(entityManager, entityClass, query, fetch);
             else {
                 trx.begin();
-                t = DataStore.findOne(entityManager, entityClass, String.format(":%s", id), fetch);
+                t = DataStore.findOne(entityManager, entityClass, query, fetch);
                 trx.commit();
             }
             return t;
@@ -125,18 +163,21 @@ public class DataStore {
         EntityTransaction trx = tryTransaction(entityManager);
         try {
             T entity;
-            if (trx == null || trx.isActive())
+            if (trx == null || trx.isActive()) {
                 entity = entityManager.merge(t);
-            else {
+                entityManager.flush();
+            } else {
                 trx.begin();
                 entity = entityManager.merge(t);
+                entityManager.flush();
                 trx.commit();
             }
-            return fetch.length == 0 ? entity
+            entity = fetch.length == 0 ? entity
                     : (T) get(entityManager
                     , entity.getClass()
                     , entityManager.getEntityManagerFactory().getPersistenceUnitUtil().getIdentifier(entity)
                     , fetch).orElse(null);
+            return entity;
         } catch(Exception x) {
             if (Objects.nonNull(trx)) trx.rollback();
             throw x;
@@ -161,6 +202,66 @@ public class DataStore {
             if (Objects.nonNull(trx)) trx.rollback();
             throw x;
         }
+    }
+
+    public static <T> int deleteAll(EntityManager entityManager, Class<T> entityClass, Paged.Page page) {
+        int count = 0;
+        EntityTransaction trx = tryTransaction(entityManager);
+        try {
+            if (trx == null || trx.isActive())  {
+                for(T t : list(entityManager, entityClass, page).getList()) {
+                    entityManager.remove(t);
+                    count++;
+                }
+                entityManager.flush();
+            } else {
+                trx.begin();
+                for(T t : list(entityManager, entityClass, page).getList()) {
+                    entityManager.remove(t);
+                    count++;
+                }
+                entityManager.flush();
+                trx.commit();
+            }
+        } catch(Exception x) {
+            if (Objects.nonNull(trx)) trx.rollback();
+            throw x;
+        }
+        return count;
+    }
+
+    public static <T> int deleteAll(EntityManager entityManager, Class<T> entityClass) {
+        return deleteAll(entityManager, entityClass, Paged.Page.of(1, 100));
+    }
+
+    public static <T> int deleteWhere(EntityManager entityManager, Class<T> entityClass, String q, Paged.Page page) {
+        int count = 0;
+        EntityTransaction trx = tryTransaction(entityManager);
+        try {
+            if (trx == null || trx.isActive())  {
+                for(T t : findAll(entityManager, entityClass, q, page).getList()) {
+                    entityManager.remove(t);
+                    count++;
+                }
+                entityManager.flush();
+            } else {
+                trx.begin();
+                for(T t : findAll(entityManager, entityClass, q, page).getList()) {
+                    entityManager.remove(t);
+                    count++;
+                }
+                entityManager.flush();
+                trx.commit();
+            }
+        } catch(Exception x) {
+            if (Objects.nonNull(trx)) trx.rollback();
+            throw x;
+        }
+        return count;
+    }
+
+    public static <T> int deleteWhere(EntityManager entityManager, Class<T> entityClass, String q) {
+        return deleteWhere(entityManager, entityClass, q, Paged.Page.of(1, 100));
     }
 
     public static class Q<T> {

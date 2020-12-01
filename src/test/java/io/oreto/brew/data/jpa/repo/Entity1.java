@@ -1,17 +1,22 @@
 package io.oreto.brew.data.jpa.repo;
 
+import io.oreto.brew.data.Model;
+
 import javax.persistence.*;
+import javax.validation.constraints.NotNull;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 @Entity
-public class Entity1 {
+public class Entity1 implements Model<Long> {
 
     @Id @GeneratedValue(strategy = GenerationType.AUTO)
     private Long id;
-    private String name;
+
+    @NotNull @Column private String name;
+    @Column(updatable = false, nullable = false) private String createdBy;
 
     @ElementCollection(fetch = FetchType.LAZY)
     private List<String> strings;
@@ -19,10 +24,10 @@ public class Entity1 {
     @ElementCollection(fetch = FetchType.LAZY)
     private Map<String, String> entries;
 
-    @OneToMany(cascade = CascadeType.PERSIST)
+    @OneToMany(cascade = { CascadeType.PERSIST, CascadeType.REMOVE })
     private List<Entity2> entity2s;
 
-    @OneToOne(cascade = CascadeType.PERSIST)
+    @OneToOne(cascade = { CascadeType.PERSIST, CascadeType.REMOVE })
     private Entity2 entity2;
 
     public Entity1() { }
@@ -63,10 +68,17 @@ public class Entity1 {
         this.name = name;
     }
 
+    public String getCreatedBy() {
+        return createdBy;
+    }
+
+    public void setCreatedBy(String createdBy) {
+        this.createdBy = createdBy;
+    }
+
     public void setEntity2s(List<Entity2> entity2s) {
         this.entity2s = entity2s;
     }
-
 
     public Entity1 withId(Long id) {
         this.id = id;
@@ -107,6 +119,11 @@ public class Entity1 {
 
     public Entity1 withEntity2(Entity2 entity2) {
         this.entity2 = entity2;
+        return this;
+    }
+
+    public Entity1 withCreatedBy(String createdBy) {
+        this.createdBy = createdBy;
         return this;
     }
 }

@@ -254,13 +254,19 @@ public class Reflect {
             if (!copyOptions.nullsOnly || Obj.notInitialized(getFieldValue(o1, field))) {
                 if (copyOptions.mergeCollections && List.class.isAssignableFrom(field.getType())) {
                     List l1 = (List) getFieldValue(o1, field);
-                    l1.addAll((List) getFieldValue(o2, field));
+                    List l2 = (List) getFieldValue(o2, field);
+                    if (Objects.nonNull(l1) && Objects.nonNull(l2))
+                        l1.addAll(l2);
                 } else if (copyOptions.mergeCollections && Set.class.isAssignableFrom(field.getType())) {
                     Set s1 = (Set) getFieldValue(o1, field);
-                    s1.addAll((Set) getFieldValue(o2, field));
+                    Set s2 = (Set) getFieldValue(o2, field);
+                    if (Objects.nonNull(s1) && Objects.nonNull(s2))
+                        s1.addAll(s2);
                 } else if (copyOptions.mergeCollections && Map.class.isAssignableFrom(field.getType())) {
                     Map m1 = (Map) getFieldValue(o1, field);
-                    m1.putAll((Map) getFieldValue(o2, field));
+                    Map m2 = (Map) getFieldValue(o2, field);
+                    if (Objects.nonNull(m1) && Objects.nonNull(m2))
+                        m1.putAll(m2);
                 } else
                     setFieldValue(o1, field, getFieldValue(o2, field));
             }

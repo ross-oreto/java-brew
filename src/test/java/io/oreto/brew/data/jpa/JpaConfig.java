@@ -4,18 +4,15 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
-import org.springframework.transaction.annotation.EnableTransactionManagement;
 
-import javax.persistence.EntityManagerFactory;
 import javax.sql.DataSource;
 import java.util.Properties;
 
 @Configuration
 @EnableJpaRepositories(basePackages = "io.oreto.brew.data.jpa.repo")
-@EnableTransactionManagement
+//@EnableTransactionManagement
 public class JpaConfig {
 
     @Bean
@@ -39,6 +36,7 @@ public class JpaConfig {
         hibernateProperties.setProperty("hibernate.show_sql", "true");
         hibernateProperties.setProperty("hibernate.cache.use_second_level_cache", "false");
         hibernateProperties.setProperty("hibernate.cache.use_query_cache", "false");
+        hibernateProperties.setProperty("hibernate.connection.autocommit", "false");
 
         return hibernateProperties;
     }
@@ -53,10 +51,10 @@ public class JpaConfig {
         return em;
     }
 
-    @Bean
-    JpaTransactionManager transactionManager(EntityManagerFactory entityManagerFactory) {
-        JpaTransactionManager transactionManager = new JpaTransactionManager();
-        transactionManager.setEntityManagerFactory(entityManagerFactory);
-        return transactionManager;
-    }
+//    @Bean
+//    JpaTransactionManager transactionManager(EntityManagerFactory entityManagerFactory) {
+//        JpaTransactionManager transactionManager = new JpaTransactionManager();
+//        transactionManager.setEntityManagerFactory(entityManagerFactory);
+//        return transactionManager;
+//    }
 }

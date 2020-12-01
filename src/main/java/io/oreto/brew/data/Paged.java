@@ -81,7 +81,7 @@ public class Paged<T> {
         public int getSize() {
             return size;
         }
-        public long getCount() {
+        public Long getCount() {
             return count;
         }
         public int getPages() {
