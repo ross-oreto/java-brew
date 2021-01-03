@@ -1,4 +1,4 @@
-package io.oreto.brew.json;
+package io.oreto.brew.serialize;
 
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.JavaType;

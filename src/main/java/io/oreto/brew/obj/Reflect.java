@@ -4,8 +4,8 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.oreto.brew.collections.Lists;
 import io.oreto.brew.str.Str;
 
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.*;
@@ -138,7 +138,7 @@ public class Reflect {
     }
 
     public static Object getFieldValue(Object o, Field field)
-            throws IllegalAccessException, NoSuchMethodException, InvocationTargetException {
+            throws ReflectiveOperationException {
         Object value;
         if (isFieldPublic(field)) {
             value = field.get(o);
@@ -182,8 +182,16 @@ public class Reflect {
     }
 
     public static Object getFieldValue(Object o, String field)
-            throws IllegalAccessException, NoSuchMethodException, InvocationTargetException, NoSuchFieldException {
+            throws ReflectiveOperationException {
         return getFieldValue(o, getField(o, field).orElseThrow(() -> new NoSuchFieldException("no such field " + field)));
+    }
+
+    public static Object getAttributeValue(Annotation annotation, String attribute)
+            throws ReflectiveOperationException {
+        Method method = Arrays.stream(annotation.annotationType().getMethods())
+                .filter(it -> it.getName().equals(attribute)).findFirst().orElseThrow(() ->
+                        new NoSuchElementException("no such attribute " + attribute));
+        return  method.invoke(annotation);
     }
 
     public static Optional<Method> getSetter(Field field, Class<?> cls) {
@@ -219,7 +227,7 @@ public class Reflect {
     }
 
     public static void setFieldValue(Object o, Field field, Object value)
-            throws IllegalAccessException, NoSuchMethodException, InvocationTargetException {
+            throws ReflectiveOperationException {
 
         if (isFieldPublic(field))
             field.set(o, value);
@@ -233,13 +241,13 @@ public class Reflect {
     }
 
     public static void setFieldValue(Object o, String field, Object value)
-            throws IllegalAccessException, NoSuchMethodException, InvocationTargetException, NoSuchFieldException {
+            throws ReflectiveOperationException {
         setFieldValue(o, getField(o, field).orElseThrow(() -> new NoSuchFieldException("no such field " + field)), value);
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
     public static void copy(Object o1, Object o2, Iterable<String> names, CopyOptions copyOptions)
-            throws InvocationTargetException, NoSuchMethodException, IllegalAccessException {
+            throws ReflectiveOperationException {
         Set<String> nameSet = StreamSupport.stream(names.spliterator(), false).collect(Collectors.toSet());
 
         Iterable<Field> iterable = names.iterator().hasNext() ? getAllFields(o1, copyOptions.ignore).stream()
@@ -274,28 +282,28 @@ public class Reflect {
     }
 
     public static void copy(Object o1, Object o2, Iterable<String> names)
-            throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
+            throws ReflectiveOperationException {
         copy(o1, o2, names, CopyOptions.create());
     }
 
     public static void copy(Object o1, Object o2, CopyOptions copyOptions)
-            throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
+            throws ReflectiveOperationException {
         copy(o1, o2, Lists.EMPTY_STRING_LIST, copyOptions);
     }
 
     public static void copy(Object o1, Object o2)
-            throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
+            throws ReflectiveOperationException {
         copy(o1, o2, Lists.EMPTY_STRING_LIST, CopyOptions.create());
     }
 
     public static void copy(Object o1, Object o2, String... names)
-            throws InvocationTargetException, NoSuchMethodException, IllegalAccessException {
+            throws ReflectiveOperationException {
         copy(o1, o2, Arrays.asList(names), CopyOptions.create());
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
     public static void copy(Object o1, Map<String, Object> values, CopyOptions copyOptions)
-            throws InvocationTargetException, NoSuchMethodException, IllegalAccessException {
+            throws ReflectiveOperationException {
 
         Iterable<Field> iterable = getAllFields(o1, copyOptions.ignore).stream()
                 .filter(it -> isFieldPublic(it) || (getSetter(it, o1).isPresent() && getGetter(it, o1).isPresent()))
@@ -320,7 +328,7 @@ public class Reflect {
     }
 
     public static void copy(Object o1, Map<String, Object> values)
-            throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
+            throws ReflectiveOperationException {
         copy(o1, values, CopyOptions.create());
     }
 

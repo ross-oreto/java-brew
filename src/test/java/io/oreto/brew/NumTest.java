@@ -1,13 +1,13 @@
 package io.oreto.brew;
 
-import io.oreto.brew.num.*;
 import io.oreto.brew.num.Range;
-import org.junit.Test;
+import io.oreto.brew.num.*;
+import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
 import java.math.RoundingMode;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class NumTest {
 

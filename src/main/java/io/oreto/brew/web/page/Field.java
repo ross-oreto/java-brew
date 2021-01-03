@@ -1,5 +1,7 @@
 package io.oreto.brew.web.page;
 
+import io.oreto.brew.data.validation.NotNull;
+import io.oreto.brew.data.validation.Required;
 import io.oreto.brew.web.page.constants.C;
 
 import java.sql.Timestamp;
@@ -37,9 +39,9 @@ public class Field {
                 .withName(String.format("%s.%s", formName, field.getName()), field.getType());
 
         if (Arrays.stream(field.getAnnotations())
-                .anyMatch(it -> it.annotationType() == javax.validation.constraints.NotNull.class
-                        || it.annotationType() == javax.validation.constraints.NotBlank.class
-                        || it.annotationType() == javax.validation.constraints.NotEmpty.class)) {
+                .anyMatch(it -> it.annotationType() == NotNull.class
+                        || it.annotationType() == Required.class
+                        )) {
             newField.required();
         }
         return newField;

@@ -1,8 +1,9 @@
 package io.oreto.brew.web.page;
 
-import java.util.List;
-import java.util.function.Function;
+import io.oreto.brew.data.validation.Validator;
 
-public interface Validatable<T> {
-    List<Function<Form<T>, Notification>> validators();
+import java.util.List;
+
+public interface Validatable {
+    List<Validator<?>> validators();
 }

@@ -1,4 +1,4 @@
-package io.oreto.brew.json;
+package io.oreto.brew.serialize.json;
 
 public interface Jsonable {
     JsonRenderer json();

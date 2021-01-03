@@ -177,14 +177,26 @@ public class ViewModel extends Page {
     }
 
     @Override
-    public ViewModel notify(String name, String message, Notification.Type type, String... args) {
-        super.notify(name, message, type, args);
+    public ViewModel notify(String message, Notification.Type type, String group, String... args) {
+        super.notify(message, type, group, args);
         return this;
     }
 
     @Override
-    public ViewModel notify(String name, String message, String... args) {
-        super.notify(name, message, args);
+    public ViewModel notify(String message, Notification.Type type) {
+        super.notify(message, type);
+        return this;
+    }
+
+    @Override
+    public ViewModel notify(String message, String... args) {
+        super.notify(message, args);
+        return this;
+    }
+
+    @Override
+    public ViewModel notify(Notification notification) {
+        super.notify(notification);
         return this;
     }
 

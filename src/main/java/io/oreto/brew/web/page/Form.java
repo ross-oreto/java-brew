@@ -1,21 +1,19 @@
 package io.oreto.brew.web.page;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import io.oreto.brew.Bean;
 import io.oreto.brew.collections.Lists;
+import io.oreto.brew.data.validation.Validator;
 import io.oreto.brew.obj.Reflect;
 import io.oreto.brew.str.Str;
 import io.oreto.brew.web.page.constants.C;
 
 import javax.persistence.GeneratedValue;
-import javax.validation.ConstraintViolation;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-public class Form<T> implements Notifiable, Validatable<T> {
+public class Form<T> implements Notifiable, Validatable {
 
     public static <T> Form<T> of(Class<T> cls) {
         return new Form<T>(cls.getSimpleName()).withFields(cls);
@@ -28,21 +26,22 @@ public class Form<T> implements Notifiable, Validatable<T> {
     protected String name;
     protected List<Field> fields = new ArrayList<>();
     protected T data;
-    protected @JsonIgnore List<Function<Form<T>, Notification>> validators = new ArrayList<>();
+
+    @JsonIgnore
+    protected List<Validator<?>> validators = new ArrayList<>();
+
     protected boolean valid = true;
-    public @JsonIgnore FormValidators<T> validation;
     protected List<Notification> notifications = new ArrayList<>();
     protected Locale locale;
 
     protected Form(String name) {
         this.name = Str.toCamel(name);
-        validation = new FormValidators<T>(this);
     }
 
     public String getName() { return name; }
 
     public List<Field> fields() { return fields; }
-    public List<Function<Form<T>, Notification>> validators() { return validators; }
+    public List<Validator<?>> validators() { return validators; }
 
     public T getData() {
         return data;
@@ -51,61 +50,34 @@ public class Form<T> implements Notifiable, Validatable<T> {
     public Form<T> withData(T data) { this.data = data; return this; }
     public Form<T> withLocale(Locale locale) { this.locale = locale; return this; }
 
-    public Form<T> withValidator(Function<Form<T>, Notification> validator) {
-        this.validators.add(validator);
+    public <V> Form<T> withValidator(Validator<V> validator) {
+        this.validators.add(validator.group(name));
         return this;
     }
 
-    public Form<T> withValidator(Supplier<Notification> validator) {
-        this.validators.add((Form<T> f) -> validator.get());
+    public <V> Form<T> withValidator(Function<T, Validator<V>> validator) {
+        this.validators.add(validator.apply(data).group(name));
         return this;
     }
 
-    public Form<T> withValidator(String name, Function<T, Boolean> validator, String...args) {
-        this.validators.add((Form<T> f) -> {
-            if (validator.apply(f.data))
-                return new Valid(name);
-            else
-                return f.validation.error(name, f.data, FormValidators.Invalid(name), args);
-        });
-        return this;
-    }
-
-    public Form<T> withValidator(Function<T, String> validator, String name, String...args) {
-        this.validators.add((Form<T> f) -> {
-            String code = validator.apply(f.data);
-            if (Str.isEmpty(code))
-                return new Valid(name);
-            else
-                return f.validation.error(name, f.data, code, args);
-        });
-        return this;
-    }
-
-    @SuppressWarnings("unchecked")
     public Form<T> validate(Locale locale) {
-        Set<ConstraintViolation<T>> violations = Bean.validate(locale, data);
-        for (ConstraintViolation<T> violation : violations) {
-            Error error = new Error(violation.getPropertyPath().toString()
-                    , violation.getInvalidValue()
-                    , violation.getMessage()).markLocalized();
-            withError(error);
+        // check data object for validatable implementation
+        if (data instanceof Validatable) {
+            validators.addAll(((Validatable) data).validators());
         }
 
-        if (data instanceof Validatable) {
-            validators.addAll(((Validatable<T>) data).validators());
+        // validate data object using annotations
+        for(Validator.Invalid invalid : Validator.validate(data)) {
+           withValidationError(invalid);
         }
-        for(Function<Form<T>, Notification> func : validators) {
-            Notification result = func.apply(this);
-            if (result instanceof Error) {
-                withError((Error) result);
-            } else {
-                result.setType(Notification.Type.valid);
-                notifications.add(result);
-            }
+
+        // finally run validators on the form
+        for(Validator<?> validator : validators) {
+            validator.validate().ifPresent(this::withValidationError);
         }
         if (Objects.nonNull(locale))
             localize(locale);
+
         return this;
     }
 
@@ -134,29 +106,29 @@ public class Form<T> implements Notifiable, Validatable<T> {
     }
 
     public boolean isValid() {
-        return valid = errors().size() == 0;
+        return valid = validationErrors().size() == 0;
     }
 
-    public Form<T> withError(Error error) {
+    public Form<T> withValidationError(Validator.Invalid error) {
         notifications.add(error);
         return this;
     }
 
-    public Form<T> withError(List<Error> errors) {
+    public Form<T> withValidationErrors(List<Validator.Invalid> errors) {
         notifications.addAll(errors);
         return this;
     }
 
-    public List<Error> errors() {
+    public List<Validator.Invalid> validationErrors() {
         return notifications.stream()
-                .filter(it -> it instanceof Error)
-                .map(it -> (Error) it)
+                .filter(it -> it instanceof Validator.Invalid)
+                .map(it -> (Validator.Invalid) it)
                 .collect(Collectors.toList());
     }
 
-    public List<Error> errors(String name) {
-        return errors().stream()
-                .filter(it -> it.name.equals(name))
+    public List<Validator.Invalid> validationErrors(String name) {
+        return validationErrors().stream()
+                .filter(it -> it.group.equals(name))
                 .collect(Collectors.toList());
     }
 
@@ -262,19 +234,19 @@ public class Form<T> implements Notifiable, Validatable<T> {
     }
 
     @Override
-    public Form<T> notify(String name, String message, Notification.Type type, String... args) {
+    public Form<T> notify(String message, Notification.Type type, String group, String... args) {
         getNotifications().add(
-                new Notification(name, formPreface(message), type).withArgs(args)
+                Notification.of(formPreface(message), type, group).withArgs(args)
         );
         return this;
     }
 
     public Form<T> notify(String message, Notification.Type type, String... args) {
-        return notify(name, message, type, args);
+        return notify(message, type, name, args);
     }
 
     public Form<T> notify(String message, String... args) {
-        return notify(name, message, Notification.Type.info, args);
+        return notify(message, Notification.Type.info, name, args);
     }
 
     @Override
@@ -294,48 +266,5 @@ public class Form<T> implements Notifiable, Validatable<T> {
 
     public Form<T> localize() {
         return localize(locale == null ? Locale.US : locale);
-    }
-
-    static public class Valid extends Notification {
-        public Valid(String name) {
-            super();
-            this.name = name;
-        }
-
-        public Valid(String name, String message) {
-            super(name, message, Type.success);
-        }
-    }
-
-    static public class Error extends Notification {
-        protected Object invalidValue;
-
-        public Error(String name, String message) {
-            super(name, message, Type.error);
-        }
-
-        public Error(String name, Object invalidValue, String message) {
-            super(name, message, Type.error);
-            this.invalidValue = invalidValue;
-        }
-
-        public Object getInvalidValue() {
-            return invalidValue;
-        }
-        public void setInvalidValue(Object invalidValue) {
-            this.invalidValue = invalidValue;
-        }
-
-        @Override
-        public Error markLocalized() {
-             super.markLocalized();
-             return this;
-        }
-
-        @Override
-        public Error withArgs(String... args) {
-            super.withArgs(args);
-            return this;
-        }
     }
 }

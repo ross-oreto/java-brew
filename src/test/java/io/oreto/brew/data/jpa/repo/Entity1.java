@@ -1,9 +1,9 @@
 package io.oreto.brew.data.jpa.repo;
 
 import io.oreto.brew.data.Model;
+import io.oreto.brew.data.validation.NotNull;
 
 import javax.persistence.*;
-import javax.validation.constraints.NotNull;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -15,7 +15,8 @@ public class Entity1 implements Model<Long> {
     @Id @GeneratedValue(strategy = GenerationType.AUTO)
     private Long id;
 
-    @NotNull @Column private String name;
+    @NotNull
+    @Column private String name;
     @Column(updatable = false, nullable = false) private String createdBy;
 
     @ElementCollection(fetch = FetchType.LAZY)

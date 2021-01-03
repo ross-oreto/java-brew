@@ -7,34 +7,42 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public class Notification {
-    protected String name;
+    public static Notification of(String message, Type type, String group) {
+        return new Notification(message, type, group);
+    }
+
+    public static Notification of(String message, Type type) {
+        return new Notification(message, type, "");
+    }
+
+    public static Notification of(String message, String group) {
+        return of(message, Type.info, group);
+    }
+
+    public static Notification of(String message) {
+        return of(message, "");
+    }
+
     protected String message;
     protected Type type;
+    protected String group;
     private boolean localized;
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     protected String[] args;
 
-    public Notification(String name, String message, Type type) {
-        this.name = name;
+    protected Notification(String message, Type type, String group) {
         this.message = message;
         this.type = type;
+        this.group = group;
     }
 
-    public Notification(String name, String message) {
-        this.name = name;
-        this.message = message;
-        this.type = Type.info;
+    public String getGroup() {
+        return group;
     }
 
-    public Notification(){ }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
+    public void setGroup(String group) {
+        this.group = group;
     }
 
     public String getMessage() {
@@ -66,7 +74,7 @@ public class Notification {
     }
 
     public Notification withName(String name) {
-        this.name = name;
+        this.group = name;
         return this;
     }
 
@@ -109,6 +117,6 @@ public class Notification {
     }
 
     public enum Type {
-        info, success, warning, error, tip, description, valid
+        info, success, warning, error, tip, description, valid, invalid
     }
 }

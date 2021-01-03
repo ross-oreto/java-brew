@@ -2,8 +2,6 @@ package io.oreto.brew.data;
 
 import io.oreto.brew.obj.Reflect;
 
-import java.lang.reflect.InvocationTargetException;
-
 public interface Model<ID> {
     default String idName() {
         return "id";
@@ -21,7 +19,7 @@ public interface Model<ID> {
     default void setId(ID id) {
         try {
             Reflect.setFieldValue(this, idName(), id);
-        } catch (IllegalAccessException | NoSuchMethodException | InvocationTargetException | NoSuchFieldException e) {
+        } catch (ReflectiveOperationException e) {
             e.printStackTrace();
         }
     }

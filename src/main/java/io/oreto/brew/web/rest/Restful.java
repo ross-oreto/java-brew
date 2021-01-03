@@ -1,67 +1,80 @@
 package io.oreto.brew.web.rest;
 
-import io.oreto.brew.collections.Lists;
 import io.oreto.brew.data.Model;
 import io.oreto.brew.data.Paged;
+import io.oreto.brew.data.Pager;
+import io.oreto.brew.data.Paginate;
 import io.oreto.brew.data.jpa.Store;
 import io.oreto.brew.obj.Reflect;
 import io.oreto.brew.obj.Safe;
 import io.oreto.brew.web.page.Form;
 import io.oreto.brew.web.page.Notification;
 
+import javax.persistence.EntityManager;
 import javax.persistence.PersistenceException;
-import java.lang.reflect.InvocationTargetException;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
 public interface Restful<ID, T extends Model<ID>> extends Store<ID, T> {
-    default Form<T> form() {
-        return Form.of(getEntityClass());
+
+    default Form<T> form(T data) {
+        return Form.of(getEntityClass()).withData(data);
     }
 
-    default RestResponse<T> persistenceExceptionResponse(PersistenceException persistenceException, T entity) {
+    static <T> RestResponse<T> persistenceExceptionResponse(PersistenceException persistenceException, T entity) {
         Throwable t = persistenceException;
         Throwable cause = null;
 
-        while (Objects.nonNull(t) )  {
+        while (Objects.nonNull(t) && !Objects.equals(t, cause))  {
             cause = t;
             t = t.getCause();
         }
-        List<Notification> notifications = Lists.of(new Notification(PersistenceException.class.getSimpleName()
-                   , Safe.of(cause).q(it -> {
+        Notification notification = Notification.of(
+                   Safe.of(cause).q(it -> {
                        String message = it.getLocalizedMessage();
+                       message = message.contains(";") ? message.substring(0, message.indexOf(';')) : message;
                        return message.contains(":") ? message.substring(0, message.indexOf(':')) : message;
                    }).orElse(persistenceException.getLocalizedMessage())
-                   , Notification.Type.error));
-        return RestResponse.unprocessable(entity).withNotifications(notifications);
+                   , Notification.Type.error, "persistence error");
+        return RestResponse.unprocessable(entity).notify(notification);
     }
 
-    default RestResponse<Paged<T>> find(String q, Paged.Page page, String... fetch) {
-        return RestResponse.ok(FindAll(q, page, fetch));
+    default RestResponse<Paged<T>> list(Paginate pager, String... fetch) {
+        return RestResponse.ok(List(pager, fetch));
+    }
+    default RestResponse<Paged<T>> list(String... fetch) {
+        return RestResponse.ok(List(fetch));
+    }
+    default RestResponse<Paged<T>> list() {
+        return RestResponse.ok(List());
+    }
+
+    default RestResponse<Paged<T>> find(String q, Paginate pager, String... fetch) {
+        return RestResponse.ok(FindAll(q, pager, fetch));
     }
     default RestResponse<Paged<T>> find(String q, String... fetch) {
-        return find(q, Paged.Page.of(), fetch);
+        return find(q, Pager.of(), fetch);
     }
-    default RestResponse<T> findOne(String q, Paged.Page page, String... fetch) {
-        Optional<T> t = FindOne(q, page, fetch);
+    default RestResponse<T> findOne(String q, Paginate pager, String... fetch) {
+        Optional<T> t = FindOne(q, pager, fetch);
         return t.map(RestResponse::ok).orElseGet(RestResponse::notFound);
     }
     default RestResponse<T> findOne(String q, String... fetch) {
-        return findOne(q, Paged.Page.of(), fetch);
+        return findOne(q, Pager.of(), fetch);
     }
 
     default RestResponse<T> save(T entity, String... fetch) {
-        Form<T> form = form().withData(entity);
+        Form<T> form = form(entity);
+        EntityManager em = getEntityManager();
         if (form.submit()) {
             try {
-                return RestResponse.created(Create(entity, fetch));
+                return RestResponse.created(Create(em, entity, fetch));
             } catch (PersistenceException e) {
                 return persistenceExceptionResponse(e, entity);
             }
         } else {
-            return RestResponse.unprocessable(entity).withNotifications(form.getNotifications());
+            return RestResponse.unprocessable(entity).notify(form.getNotifications());
         }
     }
     default RestResponse<T> get(ID id, String... fetch) {
@@ -69,26 +82,50 @@ public interface Restful<ID, T extends Model<ID>> extends Store<ID, T> {
         return t.map(RestResponse::ok).orElseGet(RestResponse::notFound);
     }
     default RestResponse<T> update(T entity, String... fetch) {
-        Form<T> form = form().withData(entity);
+        Form<T> form = form(entity);
+        EntityManager em = getEntityManager();
         if (form.submit()) {
             try {
-                entity = Update(entity);
-                getEntityManager().detach(entity);
-                entity = Retrieve(entity.getId(), fetch).orElse(null);
+                entity = Update(em, entity);
+                em.detach(entity);
+                entity = Retrieve(em, entity.getId(), fetch).orElse(null);
                 return entity == null ? RestResponse.notFound() : RestResponse.ok(entity);
             } catch (PersistenceException e) {
+                em.detach(entity);
                 return persistenceExceptionResponse(e, entity);
             }
         } else {
-            return RestResponse.unprocessable(entity).withNotifications(form.getNotifications());
+            em.detach(entity);
+            return RestResponse.unprocessable(entity).notify(form.getNotifications());
         }
     }
 
-    default RestResponse<T> update(ID id, Map<String, Object> fields, String... fetch)
-            throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
-        Optional<T> t = Retrieve(id, fetch);
+    default RestResponse<T> update(ID id, Map<String, Object> fields, String... fetch) {
+        Optional<T> t = Retrieve(id);
         if (t.isPresent()) {
-            Reflect.copy(t.get(), fields, Reflect.CopyOptions.create().mergeCollections());
+            try {
+                Reflect.copy(t.get(), fields, Reflect.CopyOptions.create().mergeCollections());
+            } catch (ReflectiveOperationException e) {
+                RestResponse<T> restResponse = RestResponse.unprocessable();
+                restResponse.withError(e);
+                return restResponse;
+            }
+            return update(t.get(), fetch);
+        } else {
+            return RestResponse.notFound();
+        }
+    }
+
+    default RestResponse<T> update(ID id, T entity, Iterable<String> fields, String... fetch) {
+        Optional<T> t = Retrieve(id);
+        if (t.isPresent()) {
+            try {
+                Reflect.copy(t.get(), entity, fields, Reflect.CopyOptions.create().mergeCollections());
+            } catch (ReflectiveOperationException e) {
+                RestResponse<T> restResponse = RestResponse.unprocessable();
+                restResponse.withError(e);
+                return restResponse;
+            }
             return update(t.get(), fetch);
         } else {
             return RestResponse.notFound();
@@ -102,8 +139,6 @@ public interface Restful<ID, T extends Model<ID>> extends Store<ID, T> {
     }
 
     default RestResponse<T> delete(ID id) {
-        Optional<T> t = Retrieve(id);
-        Delete(id);
-        return t.isPresent() ? RestResponse.noContent() : RestResponse.notFound();
+        return Delete(id).isPresent() ? RestResponse.noContent() : RestResponse.notFound();
     }
 }

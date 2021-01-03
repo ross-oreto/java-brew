@@ -1,6 +1,8 @@
 package io.oreto.brew.data.jpa;
 
 import io.oreto.brew.data.Paged;
+import io.oreto.brew.data.Pager;
+import io.oreto.brew.data.Paginate;
 import io.oreto.brew.obj.Reflect;
 import io.oreto.brew.str.Str;
 
@@ -8,7 +10,6 @@ import javax.persistence.EntityManager;
 import javax.persistence.criteria.*;
 import javax.persistence.metamodel.Attribute;
 import javax.persistence.metamodel.PluralAttribute;
-import java.lang.reflect.InvocationTargetException;
 import java.sql.Timestamp;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -231,7 +232,7 @@ public class QueryParser {
     }
 
     public static <T> Paged<T> query(String q
-            , Paged.Page page
+            , Paginate pager
             , EntityManager em
             , Class<T> entityClass
             , String... fetch) {
@@ -247,7 +248,7 @@ public class QueryParser {
         } else if(Objects.nonNull(predicates.where))
             criteriaQuery.where(predicates.where);
 
-        List<Order> orders = page.getSorting().stream()
+        List<Order> orders = pager.getSorting().stream()
                 .map(it -> it.isAscending()
                         ? builder.asc(root.get(it.getName()))
                         : builder.desc(root.get(it.getName())))
@@ -255,34 +256,35 @@ public class QueryParser {
         criteriaQuery.orderBy(orders);
 
         List<T> results = em.createQuery(criteriaQuery)
-                .setFirstResult(page.getOffset())
-                .setMaxResults(page.getSize())
+                .setFirstResult((int) pager.getOffset())
+                .setMaxResults(pager.getSize())
                 .getResultList();
 
         if (fetch.length > 1) {
             for (String f : Arrays.copyOfRange(fetch, 1, fetch.length)) {
                 List<T> fetchResults = query(q
-                        , Paged.Page.of(page.getNumber(), page.getSize()).disableCount(), em, entityClass, f)
-                        .getList();
+                        , Pager.of(pager.getPage(), pager.getSize()).disableCount(), em, entityClass, f)
+                        .getPage();
 
                 for(int i = 0; i < results.size(); i++) {
                     try {
                         Reflect.setFieldValue(results.get(i), f, Reflect.getFieldValue(fetchResults.get(i), f));
-                    } catch (IllegalAccessException | NoSuchMethodException | InvocationTargetException | NoSuchFieldException e) {
+                    } catch (ReflectiveOperationException e) {
                         e.printStackTrace();
                     }
                 }
             }
         }
 
-        return Paged.of(results, page.isCountEnabled() ? page.withCount(count(q, em, entityClass)) : page);
+        return Paged.of(pager.isDistinct() ? results.stream().distinct().collect(Collectors.toList()) : results
+                , pager.isCountEnabled() ? pager.withCount(count(q, em, entityClass)) : pager);
     }
 
     public static <T> Paged<T> query(String q
             , EntityManager em
             , Class<T> entityClass
             , String... fetch) {
-        return query(q, Paged.Page.of(), em, entityClass, fetch);
+        return query(q, Pager.of(), em, entityClass, fetch);
     }
 
     static class Expression<T> {
@@ -540,22 +542,22 @@ public class QueryParser {
                 switch (operator) {
                     case eq:
                         predicate = prop
-                                ? cb.equal(exp1, cb.nullif(exp2, value instanceof Number ? cb.sum(exp2, 1) : ""))
+                                ? cb.equal(exp1, cb.nullif(exp2, value instanceof Comparable ? cb.sum(exp2, 1) : ""))
                                 : cb.equal(exp1, value);
                         break;
                     case lt:
                         if (prop)
                             predicate = cb.lt(exp1, exp2);
                         else
-                            predicate = value instanceof Number
-                                    ? cb.lt(exp1, (Number) value)
+                            predicate = value instanceof Comparable
+                                    ? cb.lessThan(exp1, (Comparable) value)
                                     : cb.lessThan(exp1, s);
                         break;
                     case lte:
                         if (prop)
                             predicate = cb.lessThanOrEqualTo(exp1, exp2);
                         else
-                            predicate = value instanceof Number
+                            predicate = value instanceof Comparable
                                     ? cb.lessThanOrEqualTo(exp1, (Comparable) value)
                                     : cb.lessThanOrEqualTo(exp1, s);
                         break;
@@ -563,15 +565,15 @@ public class QueryParser {
                         if (prop)
                             predicate = cb.gt(exp1, exp2);
                         else
-                            predicate = value instanceof Number
-                                ? cb.gt(exp1, (Number) value)
+                            predicate = value instanceof Comparable
+                                ? cb.greaterThan(exp1, (Comparable) value)
                                 : cb.greaterThan(exp1, s);
                         break;
                     case gte:
                         if (prop)
                             predicate = cb.greaterThanOrEqualTo(exp1, exp2);
                         else
-                            predicate = value instanceof Number
+                            predicate = value instanceof Comparable
                                     ? cb.greaterThanOrEqualTo(exp1, (Comparable) value)
                                     : cb.greaterThanOrEqualTo(exp1, s);
                         break;

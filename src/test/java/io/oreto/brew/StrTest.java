@@ -2,13 +2,14 @@ package io.oreto.brew;
 
 import io.oreto.brew.num.Num;
 import io.oreto.brew.str.Str;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Optional;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
+
 
 public class StrTest {
     @Test

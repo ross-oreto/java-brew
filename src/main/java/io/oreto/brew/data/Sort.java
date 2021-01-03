@@ -5,28 +5,30 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-public class Sort {
+public class Sort implements Sortable {
     public enum Direction {
         asc, desc
     }
 
-    public static Sort of(String s) {
+    public static Sortable of(String s) {
         Sort sort = new Sort();
         String[] sorts = s.split(",");
         sort.name = sorts[0];
-        sort.direction = sorts.length > 1 && sorts[1].equals(Direction.desc.name()) ? Direction.desc : Direction.asc;
+        sort.direction = sorts.length > 1 && sorts[1].toLowerCase().equals(Direction.desc.name())
+                ? Direction.desc
+                : Direction.asc;
 
         return sort;
     }
 
-    public static List<Sort> of(List<String> s) {
+    public static List<Sortable> of(List<String> s) {
         return s.stream().filter(Objects::nonNull).map(Sort::of).collect(Collectors.toList());
     }
 
-    public static Sort of(String name, String direction) {
+    public static Sortable of(String name, String direction) {
         Sort sort = new Sort();
         sort.name = name;
-        sort.direction = Direction.valueOf(direction);
+        sort.direction = Direction.valueOf(direction.toLowerCase());
 
         return sort;
     }
@@ -34,19 +36,21 @@ public class Sort {
     private String name;
     private Direction direction = Direction.asc;
 
+    @Override
     public String getName() {
         return name;
     }
 
+    @Override
     public Direction getDirection() {
         return direction;
     }
 
-    public boolean isAscending() {
-        return direction == Direction.asc;
+    public void setName(String name) {
+        this.name = name;
     }
 
-    public boolean isDescending() {
-        return direction == Direction.desc;
+    public void setDirection(Direction direction) {
+        this.direction = direction;
     }
 }

@@ -1,12 +1,13 @@
 package io.oreto.brew.web.security;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
-import io.oreto.brew.json.JSON;
 import io.oreto.brew.security.Anonymous;
 import io.oreto.brew.security.UserDetails;
+import io.oreto.brew.serialize.json.JSON;
 import io.oreto.brew.str.Str;
 import io.oreto.brew.web.http.HttpContext;
 import io.oreto.brew.web.page.constants.C;
@@ -43,6 +44,12 @@ public class Jwt {
         Date now = new Date();
         Date exp = new Date(System.currentTimeMillis() + (24000*3600));
 
+        String userClaim;
+        try {
+            userClaim = JSON.asString(user);
+        } catch (JsonProcessingException e) {
+            userClaim = null;
+        }
         return Jwts.builder()
                 .setId(UUID.randomUUID().toString().replace("-", ""))
                 .setNotBefore(now)
@@ -50,12 +57,12 @@ public class Jwt {
                 .setIssuedAt(now)
                 .setIssuer(issuer)
                 .setSubject(user.getUsername())
-                .claim(C.user, JSON.asString(user))
+                .claim(C.user, userClaim)
                 .signWith(key)
                 .compact();
     }
 
-    static Claims readJwt(SecretKey key, String jwt) {
+    public static Claims readJwt(SecretKey key, String jwt) {
         return Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(jwt).getBody();
     }
 

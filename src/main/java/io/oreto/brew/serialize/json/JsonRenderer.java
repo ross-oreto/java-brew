@@ -1,5 +1,6 @@
-package io.oreto.brew.json;
+package io.oreto.brew.serialize.json;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -32,7 +33,11 @@ public class JsonRenderer {
             }
         }
         if ((Str.isBlank(dropValue) || o == null) && Str.isBlank(selectValue)) {
-            return o instanceof ObjectNode ? o.toString() : JSON.asString(o);
+            try {
+                return o instanceof ObjectNode ? o.toString() : JSON.asString(o);
+            } catch (JsonProcessingException ignored) {
+                return null;
+            }
         } else {
             ObjectNode element = o instanceof ObjectNode ? (ObjectNode) o : (ObjectNode) JSON.asJson(o);
             List<ObjectNode> json = element.isArray()
@@ -69,7 +74,11 @@ public class JsonRenderer {
     }
 
     public String render(Object o)  {
-        return JSON.asString(o);
+        try {
+            return JSON.asString(o);
+        } catch (JsonProcessingException ignored) {
+            return null;
+        }
     }
 
 
