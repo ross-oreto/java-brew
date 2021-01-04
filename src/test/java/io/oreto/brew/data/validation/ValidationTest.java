@@ -35,6 +35,7 @@ public class ValidationTest {
                                 .property("test").check(test -> Objects.equals(test, "test")))
                         .validate();
         assertFalse(form.isValid());
+        assertEquals(6, form.validationErrors().size());
     }
 
     public static class Pojo1 {
@@ -80,9 +81,14 @@ public class ValidationTest {
     }
 
     public static class Pojo2 {
+        @Size(value = 2)
         private String name;
         private String test;
         private int i;
+
+        @Required(message = "validation.id.required")
+        @Size(value = 17, message = "validation.id.length")
+        private Long id;
 
         public String getName() {
             return name;
@@ -92,6 +98,9 @@ public class ValidationTest {
         }
         public int getI() {
             return i;
+        }
+        public Long getId() {
+            return id;
         }
 
         public Pojo2 withName(String name) {
@@ -104,6 +113,11 @@ public class ValidationTest {
         }
         public Pojo2 withI(int i) {
             this.i = i;
+            return this;
+        }
+
+        public Pojo2 withId(Long id) {
+            this.id = id;
             return this;
         }
     }

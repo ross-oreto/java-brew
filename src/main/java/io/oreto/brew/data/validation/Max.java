@@ -9,7 +9,7 @@ import java.lang.annotation.Target;
 @Target(ElementType.FIELD)
 @Constraint
 public @interface Max {
-    int value();
+    double value();
     String name() default "";
     String property() default "";
     String group() default "";

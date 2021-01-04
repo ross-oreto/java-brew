@@ -9,8 +9,8 @@ import java.lang.annotation.Target;
 @Target(ElementType.FIELD)
 @Constraint
 public @interface Between {
-    int x();
-    int y();
+    double x();
+    double y();
     boolean inclusive() default true;
     String name() default "";
     String property() default "";

@@ -49,6 +49,13 @@ public class Validator<T> {
                         .notNull()
                         .validate().ifPresent(errors::add);
             }
+            if (field.isAnnotationPresent(Size.class)) {
+                Size size = field.getAnnotation(Size.class);
+                Validator.of(Reflect.getFieldValue(o, field))
+                        .message(Message.of(field.getAnnotation(Size.class)))
+                        .size(size.value())
+                        .validate().ifPresent(errors::add);
+            }
             if (field.isAnnotationPresent(Max.class)) {
                 Max max = field.getAnnotation(Max.class);
                 Validator.of(Reflect.getFieldValue(o, field))
@@ -182,36 +189,36 @@ public class Validator<T> {
        return check(Objects::nonNull);
     }
 
-    private int dataSize() {
+    private double dataSize() {
         return data instanceof Number
-                ? (Integer) data
-                : data == null ? 0 : data.toString().length();
+                ? ((Number) data).doubleValue()
+                : data == null ? 0D : (double) data.toString().length();
     }
 
     public Validator<T> size(Number size) {
         message.withArgs(size.toString()).name = data instanceof Number ? Message.SIZE: Message.SIZE_CHARS;
-        return check(data -> dataSize() == size.intValue());
+        return check(data -> dataSize() == size.doubleValue());
     }
 
     public Validator<T> max(Number max) {
         message.withArgs(max.toString()).name = data instanceof Number ? Message.MAX : Message.MAX_CHARS;
-        return check(data -> dataSize() <= max.intValue());
+        return check(data -> dataSize() <= max.doubleValue());
     }
 
     public Validator<T> min(Number min) {
         message.withArgs(min.toString()).name = data instanceof Number ? Message.MIN : Message.MIN_CHARS;
-        return check(data -> dataSize() >= min.intValue());
+        return check(data -> dataSize() >= min.doubleValue());
     }
 
     public Validator<T> between(Number x, Number y, boolean inclusive) {
         message.withArgs(x.toString(), y.toString()).name = Message.BETWEEN;
-        int size = dataSize();
+        double size = dataSize();
         return check(data -> Range.numberIn(size, x, y, inclusive));
     }
 
     public Validator<T> notBetween(Number x, Number y, boolean inclusive) {
         message.withArgs(x.toString(), y.toString()).name = Message.NOT_BETWEEN;
-        int size = dataSize();
+        double size = dataSize();
         return check(data -> !Range.numberIn(size, x, y, inclusive));
     }
 
