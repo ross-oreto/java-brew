@@ -113,12 +113,11 @@ public class DataStore {
                 trx.commit();
             }
 
-            T entity = fetch.length == 0 ? t
+            return fetch.length == 0 ? t
                     : (T) get(entityManager
                     , t.getClass()
                     , entityManager.getEntityManagerFactory().getPersistenceUnitUtil().getIdentifier(t)
                     , fetch).orElse(null);
-            return entity;
         } catch(Exception x) {
             if (Objects.nonNull(trx)) trx.rollback();
             throw x;
@@ -195,17 +194,14 @@ public class DataStore {
         }
     }
 
-    public static <ID, T> Optional<T> delete(EntityManager entityManager, Class<T> entityClass, ID id) {
+    public static <T> T delete(EntityManager entityManager, T t) {
         EntityTransaction trx = tryTransaction(entityManager);
         try {
-            Optional<T> t;
             if (trx == null || trx.isActive())  {
-                t = get(entityManager, entityClass, id);
-                t.ifPresent(entityManager::remove);
+                entityManager.remove(t);
             } else {
                 trx.begin();
-                t = get(entityManager, entityClass, id);
-                t.ifPresent(entityManager::remove);
+                entityManager.remove(t);
                 trx.commit();
             }
             return t;
@@ -293,6 +289,7 @@ public class DataStore {
         private Integer page;
         private Integer max;
         private String[] order;
+        private boolean started;
 
         protected Q(Class<T> entityClass) {
             this.entityClass = entityClass;
@@ -300,11 +297,12 @@ public class DataStore {
         }
 
         private Str logic() {
-            if (str.isNotEmpty()) {
+            if (started) {
                 str.space()
                         .add(or ? QueryParser.Logical.Operator.or.name() : QueryParser.Logical.Operator.and.name())
                         .space();
-            }
+            } else
+                started = true;
             return str;
         }
 
@@ -313,9 +311,10 @@ public class DataStore {
             val = Objects.nonNull(val) && val.contains(" ") && !val.trim().startsWith("\"")
                     ? String.format("\"%s\n", val)
                     : val;
-            logic().add(Arrays.stream(opts).anyMatch(it -> it == Opt.not) ? QueryParser.Expression.NOT : Str.EMPTY)
+            logic()
                     .add(name)
                     .add("::")
+                    .add(Arrays.stream(opts).anyMatch(it -> it == Opt.not) ? QueryParser.Expression.NOT : Str.EMPTY)
                     .add(op.name())
                     .add(Arrays.stream(opts).anyMatch(it -> it == Opt.prop) ? QueryParser.Expression.PROP : Str.EMPTY)
                     .add(':')
@@ -407,7 +406,8 @@ public class DataStore {
         }
 
         public Q<T> group() {
-            str.add('(');
+            logic().add('(');
+            started = false;
             return this;
         }
 

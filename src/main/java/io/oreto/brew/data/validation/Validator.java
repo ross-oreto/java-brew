@@ -129,6 +129,10 @@ public class Validator<T> {
         return errors;
     }
 
+    public static <T> Validator<T> of(Class<T> ignored) {
+       return new Validator<>();
+    }
+
     public static <T> Validator<T> of(T data) {
         Validator<T> validator = new Validator<>();
         validator.data = data;
@@ -140,6 +144,11 @@ public class Validator<T> {
     private Function<T, Boolean> validator;
 
     private Validator() {}
+
+    public Validator<T> data(T data) {
+        this.data = data;
+        return this;
+    }
 
     public Validator<T> message(String message) {
         this.message.code = message;

@@ -79,12 +79,12 @@ public interface Store<ID, T extends Model<ID>> extends Crud<ID, T> {
         return Update(getEntityManager(), t, fetch);
     }
 
-    default Optional<T> Delete(EntityManager em, ID id) {
-        return DataStore.delete(em, getEntityClass(), id);
+    default T Delete(EntityManager em, T t) {
+        return DataStore.delete(em, t);
     }
 
     @Override
-    default Optional<T> Delete(ID id) {
-        return Delete(getEntityManager(), id);
+    default T Delete(T t) {
+        return Delete(getEntityManager(), t);
     }
 }

@@ -1,6 +1,7 @@
 package io.oreto.brew.web.rest;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import io.oreto.brew.data.validation.Validator;
 import io.oreto.brew.web.http.StatusCode;
 import io.oreto.brew.web.page.Notifiable;
 import io.oreto.brew.web.page.Notification;
@@ -142,6 +143,12 @@ public class RestResponse<T> implements Notifiable {
 
     @Override
     public RestResponse<T> notify(List<Notification> notifications) {
+        Notifiable.super.notify(notifications);
+        return this;
+    }
+
+    @Override
+    public RestResponse<T> notify(Iterable<Validator.Invalid> notifications) {
         Notifiable.super.notify(notifications);
         return this;
     }

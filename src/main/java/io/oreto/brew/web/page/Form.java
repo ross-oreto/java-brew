@@ -60,7 +60,7 @@ public class Form<T> implements Notifiable, Validatable {
         return this;
     }
 
-    public Form<T> validate(Locale locale) {
+    public boolean validate(Locale locale) {
         // check data object for validatable implementation
         if (data instanceof Validatable) {
             validators.addAll(((Validatable) data).validators());
@@ -78,31 +78,11 @@ public class Form<T> implements Notifiable, Validatable {
         if (Objects.nonNull(locale))
             localize(locale);
 
-        return this;
+        return isValid();
     }
 
-    public Form<T> validate() {
+    public boolean validate() {
        return validate(this.locale);
-    }
-
-    public boolean submit() {
-        return validate(locale).isValid();
-    }
-
-    public Form<T> submit(Consumer<Form<T>> success) {
-        if (validate(locale).isValid()){
-            success.accept(this);
-        }
-        return this;
-    }
-
-    public Form<T> submit(Consumer<Form<T>> success, Consumer<Form<T>> failure) {
-        if (validate(locale).isValid()) {
-            success.accept(this);
-        } else {
-            failure.accept(this);
-        }
-        return this;
     }
 
     public boolean isValid() {

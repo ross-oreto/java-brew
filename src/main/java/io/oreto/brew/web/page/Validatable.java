@@ -6,4 +6,6 @@ import java.util.List;
 
 public interface Validatable {
     List<Validator<?>> validators();
+    boolean validate();
+    Iterable<Validator.Invalid> validationErrors();
 }

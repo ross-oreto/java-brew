@@ -32,9 +32,8 @@ public class ValidationTest {
                         .withValidator(Validator.of(pojo2.getName()).check(name -> Objects.equals(name, "test")))
                         .withValidator(Validator.of(pojo2.getI()).check(i -> i >= 2))
                         .withValidator(data -> Validator.of(data.getTest())
-                                .property("test").check(test -> Objects.equals(test, "test")))
-                        .validate();
-        assertFalse(form.isValid());
+                                .property("test").check(test -> Objects.equals(test, "test")));
+        assertFalse(form.validate());
         assertEquals(6, form.validationErrors().size());
     }
 

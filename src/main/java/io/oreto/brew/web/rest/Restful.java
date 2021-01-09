@@ -9,6 +9,7 @@ import io.oreto.brew.obj.Reflect;
 import io.oreto.brew.obj.Safe;
 import io.oreto.brew.web.page.Form;
 import io.oreto.brew.web.page.Notification;
+import io.oreto.brew.web.page.Validatable;
 
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceException;
@@ -18,8 +19,20 @@ import java.util.Optional;
 
 public interface Restful<ID, T extends Model<ID>> extends Store<ID, T> {
 
-    default Form<T> form(T data) {
+    default Validatable validation(T data) {
         return Form.of(getEntityClass()).withData(data);
+    }
+
+    default Validatable saveValidation(T data) {
+        return validation(data);
+    }
+
+    default Validatable updateValidation(T data) {
+        return validation(data);
+    }
+
+    default Validatable deleteValidation(T data) {
+        return validation(data);
     }
 
     static <T> RestResponse<T> persistenceExceptionResponse(PersistenceException persistenceException, T entity) {
@@ -65,16 +78,16 @@ public interface Restful<ID, T extends Model<ID>> extends Store<ID, T> {
     }
 
     default RestResponse<T> save(T entity, String... fetch) {
-        Form<T> form = form(entity);
+        Validatable validation = saveValidation(entity);
         EntityManager em = getEntityManager();
-        if (form.submit()) {
+        if (validation.validate()) {
             try {
                 return RestResponse.created(Create(em, entity, fetch));
             } catch (PersistenceException e) {
                 return persistenceExceptionResponse(e, entity);
             }
         } else {
-            return RestResponse.unprocessable(entity).notify(form.getNotifications());
+            return RestResponse.unprocessable(entity).notify(validation.validationErrors());
         }
     }
     default RestResponse<T> get(ID id, String... fetch) {
@@ -82,9 +95,9 @@ public interface Restful<ID, T extends Model<ID>> extends Store<ID, T> {
         return t.map(RestResponse::ok).orElseGet(RestResponse::notFound);
     }
     default RestResponse<T> update(T entity, String... fetch) {
-        Form<T> form = form(entity);
+        Validatable validation = updateValidation(entity);
         EntityManager em = getEntityManager();
-        if (form.submit()) {
+        if (validation.validate()) {
             try {
                 entity = Update(em, entity);
                 em.detach(entity);
@@ -96,7 +109,7 @@ public interface Restful<ID, T extends Model<ID>> extends Store<ID, T> {
             }
         } else {
             em.detach(entity);
-            return RestResponse.unprocessable(entity).notify(form.getNotifications());
+            return RestResponse.unprocessable(entity).notify(validation.validationErrors());
         }
     }
 
@@ -138,7 +151,17 @@ public interface Restful<ID, T extends Model<ID>> extends Store<ID, T> {
         return update(entity, fetch);
     }
 
+    default RestResponse<T> delete(T entity) {
+        Validatable validation = deleteValidation(entity);
+        if (validation.validate()) {
+            Delete(entity);
+            return RestResponse.noContent();
+        } else {
+            return RestResponse.unprocessable(entity).notify(validation.validationErrors());
+        }
+    }
+
     default RestResponse<T> delete(ID id) {
-        return Delete(id).isPresent() ? RestResponse.noContent() : RestResponse.notFound();
+       return Retrieve(id).map(this::delete).orElseGet(RestResponse::notFound);
     }
 }

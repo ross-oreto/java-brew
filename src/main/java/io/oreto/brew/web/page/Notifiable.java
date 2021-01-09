@@ -1,5 +1,7 @@
 package io.oreto.brew.web.page;
 
+import io.oreto.brew.data.validation.Validator;
+
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -37,7 +39,7 @@ public interface Notifiable {
     }
 
     default Object notify(String message, String...args) {
-        return Notification.of(message).withArgs(args);
+        return getNotifications().add(Notification.of(message).withArgs(args));
     }
 
     default Object notify(Notification notification) {
@@ -48,5 +50,11 @@ public interface Notifiable {
     default Object notify(List<Notification> notifications) {
         getNotifications().addAll(notifications);
         return getNotifications();
+    }
+
+    default Object notify(Iterable<Validator.Invalid> validationErrors) {
+        List<Notification> notifications = getNotifications();
+        for (Validator.Invalid invalid: validationErrors) notifications.add(invalid);
+        return notifications;
     }
 }

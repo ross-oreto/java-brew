@@ -166,7 +166,7 @@ public class JpaTest {
 
         Paged<Entity1> paged = DataStore.findAll(em, Entity1.class, "name:test3");
         assertEquals(1, paged.getPager().getPage());
-        DataStore.delete(em, Entity1.class, paged.getPage().get(0).getId());
+        DataStore.delete(em, paged.getPage().get(0));
         assertTrue(DataStore.findAll(em, Entity1.class,"name:test3").getPage().isEmpty());
     }
 
