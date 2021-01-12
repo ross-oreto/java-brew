@@ -309,7 +309,7 @@ public class DataStore {
         private Q<T> op(String name, QueryParser.Expression.Operator op, Object value, Opt... opts) {
             String val = Objects.nonNull(value) ? value.toString() : null;
             val = Objects.nonNull(val) && val.contains(" ") && !val.trim().startsWith("\"")
-                    ? String.format("\"%s\n", val)
+                    ? String.format("\"%s\"", val)
                     : val;
             logic()
                     .add(name)

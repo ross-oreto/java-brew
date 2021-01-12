@@ -272,7 +272,7 @@ public class Generator {
             Files.write(file.toPath(), str.getBytes());
         else if (file.exists()) {
             Scanner scanner = new Scanner(System.in);
-            System.out.print(String.format("Overwrite existing file (%s)?  ", file.getPath()));
+            System.out.printf("Overwrite existing file (%s)?  ", file.getPath());
             String command = scanner.nextLine();
             if (command.trim().toLowerCase().startsWith("y")) {
                 Files.write(file.toPath(), str.getBytes());

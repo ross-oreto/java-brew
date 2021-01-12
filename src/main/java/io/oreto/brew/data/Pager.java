@@ -8,6 +8,9 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class Pager implements Paginate {
+    public static final int DEFAULT_PAGE = 1;
+    public static final int DEFAULT_SIZE = 10;
+
     public static Pager of(int page, int size, long count, int pages, List<String> sorting) {
         return new Pager(page, size, count, pages, sorting);
     }
@@ -25,12 +28,20 @@ public class Pager implements Paginate {
     }
 
     public static Pager of() {
-        return of(1, 20);
+        return of(DEFAULT_PAGE, DEFAULT_SIZE);
     }
 
     public static Pager of(Paginate paginate) {
         return Pager.of(paginate.getPage(), paginate.getSize(), paginate.getCount(), paginate.getPages())
                 .withSorting(paginate.getSorting());
+    }
+
+    public static Pager page(int page) {
+        return of(page, DEFAULT_SIZE);
+    }
+
+    public static Pager size(int size) {
+        return of(DEFAULT_PAGE, size);
     }
 
     private int page;
