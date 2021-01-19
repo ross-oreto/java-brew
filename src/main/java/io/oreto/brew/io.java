@@ -1,15 +1,11 @@
 package io.oreto.brew;
 
-import io.oreto.brew.constants.Generator;
 import io.oreto.brew.obj.Safe;
-import io.oreto.brew.str.Str;
 
 import java.io.File;
 import java.net.URL;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Optional;
 
@@ -31,14 +27,18 @@ public class io {
         return !isWindows();
     }
 
-    public static File loadResourceFile(String path, String... resourcePath) {
+    public static File loadResourceFile(ClassLoader classLoader, String path, String... resourcePath) {
         File file = new File(
-                Safe.of(Generator.class.getClassLoader().getResource(path)).q(URL::getFile)
+                Safe.of(classLoader.getResource(path)).q(URL::getFile)
                         .orElse(Paths.get(Paths.get(".", resourcePath).toString(), path).toString())
         );
         if (!file.exists())
             file = new File(path);
         return file;
+    }
+
+    public static File loadResourceFile(String path, String... resourcePath) {
+        return loadResourceFile(io.class.getClassLoader(), path, resourcePath);
     }
 
     public static Optional<String> fileText(String path) {

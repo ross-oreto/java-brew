@@ -202,6 +202,7 @@ public class DataStore {
             } else {
                 trx.begin();
                 entityManager.remove(t);
+                entityManager.flush();
                 trx.commit();
             }
             return t;
