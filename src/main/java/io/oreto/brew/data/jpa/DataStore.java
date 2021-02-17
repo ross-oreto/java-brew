@@ -16,7 +16,7 @@ import java.util.Optional;
 public class DataStore {
 
     public static <T> Long count(EntityManager entityManager, Class<T> entityClass, String q) {
-        return QueryParser.count(q, entityManager, entityClass);
+        return QueryReader.count(q, entityManager, entityClass);
     }
 
     public static <T> Long count(EntityManager entityManager, Class<T> entityClass) {
@@ -35,61 +35,85 @@ public class DataStore {
             , Class<T> entityClass
             , String q
             , Paginate pager
-            , String... fetch) {
-        return QueryParser.query(q
+            , Fetch.Plan fetchPlan) {
+        return QueryReader.query(q
                 , pager
                 , entityManager
                 , entityClass
-                , fetch);
+                , fetchPlan);
     }
 
     public static <T> Paged<T> findAll(EntityManager entityManager
             , Class<T> entityClass
             , String q
-            , String... fetch) {
-        return QueryParser.query(q
+            , Fetch.Plan fetchPlan) {
+        return QueryReader.query(q
                 , Pager.of()
                 , entityManager
                 , entityClass
-                , fetch);
+                , fetchPlan);
+    }
+
+    public static <T> Paged<T> findAll(EntityManager entityManager
+            , Class<T> entityClass
+            , String q) {
+       return findAll(entityManager, entityClass, q, Fetch.Plan.none());
     }
 
     public static <T> Paged<T> list(EntityManager entityManager
             , Class<T> entityClass
             , Paginate pager
-            , String... fetch) {
-        return findAll(entityManager, entityClass, "", pager, fetch);
+            , Fetch.Plan fetchPlan) {
+        return findAll(entityManager, entityClass, "", pager, fetchPlan);
+    }
+    public static <T> Paged<T> list(EntityManager entityManager
+            , Class<T> entityClass
+            , Paginate pager) {
+        return findAll(entityManager, entityClass, "", pager, Fetch.Plan.none());
     }
 
     public static <T> Paged<T> list(EntityManager entityManager
             , Class<T> entityClass
-            , String... fetch) {
-        return findAll(entityManager, entityClass, "", fetch);
+            , Fetch.Plan fetchPlan) {
+        return findAll(entityManager, entityClass, "", fetchPlan);
     }
 
     public static <T> Paged<T> list(EntityManager entityManager
             , Class<T> entityClass) {
-        return findAll(entityManager, entityClass, "");
+        return list(entityManager, entityClass, Fetch.Plan.none());
     }
 
     public static <T> Optional<T> findOne(EntityManager entityManager
             , Class<T> entityClass
             , String q
             , Paginate pager
-            , String... fetch) {
-        Paged<T> list = QueryParser.query(q
+            , Fetch.Plan fetchPlan) {
+        Paged<T> list = QueryReader.query(q
                 , pager.disableCount()
                 , entityManager
                 , entityClass
-                , fetch);
+                , fetchPlan);
         return list.getPage().size() > 0 ? Optional.of(list.getPage().get(0)) : Optional.empty();
     }
 
     public static <T> Optional<T> findOne(EntityManager entityManager
             , Class<T> entityClass
             , String q
-            , String... fetch) {
-        return findOne(entityManager, entityClass, q, Pager.of(), fetch);
+            , Paginate pager) {
+       return findOne(entityManager, entityClass, q, pager, Fetch.Plan.none());
+    }
+
+    public static <T> Optional<T> findOne(EntityManager entityManager
+            , Class<T> entityClass
+            , String q
+            , Fetch.Plan fetchPlan) {
+        return findOne(entityManager, entityClass, q, Pager.of(), fetchPlan);
+    }
+
+    public static <T> Optional<T> findOne(EntityManager entityManager
+            , Class<T> entityClass
+            , String q) {
+        return findOne(entityManager, entityClass, q, Pager.of(), Fetch.Plan.none());
     }
 
     public static EntityTransaction tryTransaction(EntityManager entityManager) {
@@ -100,7 +124,7 @@ public class DataStore {
     }
 
     @SuppressWarnings("unchecked")
-    public static <T> T save(EntityManager entityManager, T t, String... fetch) {
+    public static <T> T save(EntityManager entityManager, T t, Fetch.Plan fetchPlan) {
         EntityTransaction trx = tryTransaction(entityManager);
 
         try {
@@ -113,24 +137,29 @@ public class DataStore {
                 trx.commit();
             }
 
-            return fetch.length == 0 ? t
+            return fetchPlan.isEmpty() ? t
                     : (T) get(entityManager
                     , t.getClass()
                     , entityManager.getEntityManagerFactory().getPersistenceUnitUtil().getIdentifier(t)
-                    , fetch).orElse(null);
+                    , fetchPlan).orElse(null);
         } catch(Exception x) {
             if (Objects.nonNull(trx)) trx.rollback();
             throw x;
         }
     }
 
-    public static <ID, T> Optional<T> get(EntityManager entityManager, Class<T> entityClass, ID id, String... fetch) {
+    public static <T> T save(EntityManager entityManager, T t) {
+        return save(entityManager, t, Fetch.Plan.none());
+    }
+
+    public static <ID, T> Optional<T> get(EntityManager entityManager, Class<T> entityClass, ID id, Fetch.Plan fetchPlan) {
+//        entityManager.find(entityClass, id);
         EntityTransaction trx = tryTransaction(entityManager);
         try {
             String query = String.format(":%s", id);
 
             if (id.getClass().isAnnotationPresent(Embeddable.class) ||
-                    id.getClass().isAnnotationPresent(IdClass.class)) {
+                    entityClass.isAnnotationPresent(IdClass.class)) {
                 Q<?> q = Q.of(id.getClass());
 
                 String idRef = "";
@@ -154,10 +183,10 @@ public class DataStore {
 
             Optional<T> t;
             if (trx == null || trx.isActive())
-                t = DataStore.findOne(entityManager, entityClass, query, fetch);
+                t = DataStore.findOne(entityManager, entityClass, query, fetchPlan);
             else {
                 trx.begin();
-                t = DataStore.findOne(entityManager, entityClass, query, fetch);
+                t = DataStore.findOne(entityManager, entityClass, query, fetchPlan);
                 trx.commit();
             }
             return t;
@@ -167,8 +196,12 @@ public class DataStore {
         }
     }
 
+    public static <ID, T> Optional<T> get(EntityManager entityManager, Class<T> entityClass, ID id) {
+        return get(entityManager, entityClass, id, Fetch.Plan.none());
+    }
+
     @SuppressWarnings("unchecked")
-    public static <T> T update(EntityManager entityManager, T t, String... fetch) {
+    public static <T> T update(EntityManager entityManager, T t, Fetch.Plan fetchPlan) {
         EntityTransaction trx = tryTransaction(entityManager);
         try {
             T entity;
@@ -181,17 +214,21 @@ public class DataStore {
                 entityManager.flush();
                 trx.commit();
             }
-            entity = fetch.length == 0 ? entity
+            entity = fetchPlan.isEmpty() ? entity
                     : (T) get(entityManager
                     , entity.getClass()
                     , entityManager.getEntityManagerFactory().getPersistenceUnitUtil().getIdentifier(entity)
-                    , fetch).orElse(null);
+                    , fetchPlan).orElse(null);
             return entity;
         } catch(Exception x) {
             entityManager.detach(t);
             if (Objects.nonNull(trx)) trx.rollback();
             throw x;
         }
+    }
+
+    public static <T> T update(EntityManager entityManager, T t) {
+       return update(entityManager, t, Fetch.Plan.none());
     }
 
     public static <T> T delete(EntityManager entityManager, T t) {
@@ -217,14 +254,14 @@ public class DataStore {
         EntityTransaction trx = tryTransaction(entityManager);
         try {
             if (trx == null || trx.isActive())  {
-                for(T t : list(entityManager, entityClass, pager).getPage()) {
+                for(T t : list(entityManager, entityClass, pager, Fetch.Plan.none()).getPage()) {
                     entityManager.remove(t);
                     count++;
                 }
                 entityManager.flush();
             } else {
                 trx.begin();
-                for(T t : list(entityManager, entityClass, pager).getPage()) {
+                for(T t : list(entityManager, entityClass, pager, Fetch.Plan.none()).getPage()) {
                     entityManager.remove(t);
                     count++;
                 }
@@ -247,14 +284,14 @@ public class DataStore {
         EntityTransaction trx = tryTransaction(entityManager);
         try {
             if (trx == null || trx.isActive())  {
-                for(T t : findAll(entityManager, entityClass, q, pager).getPage()) {
+                for(T t : findAll(entityManager, entityClass, q, pager, Fetch.Plan.none()).getPage()) {
                     entityManager.remove(t);
                     count++;
                 }
                 entityManager.flush();
             } else {
                 trx.begin();
-                for(T t : findAll(entityManager, entityClass, q, pager).getPage()) {
+                for(T t : findAll(entityManager, entityClass, q, pager, Fetch.Plan.none()).getPage()) {
                     entityManager.remove(t);
                     count++;
                 }
@@ -300,14 +337,14 @@ public class DataStore {
         private Str logic() {
             if (started) {
                 str.space()
-                        .add(or ? QueryParser.Logical.Operator.or.name() : QueryParser.Logical.Operator.and.name())
+                        .add(or ? QueryReader.Logical.Operator.or.name() : QueryReader.Logical.Operator.and.name())
                         .space();
             } else
                 started = true;
             return str;
         }
 
-        private Q<T> op(String name, QueryParser.Expression.Operator op, Object value, Opt... opts) {
+        private Q<T> op(String name, QueryReader.Expression.Operator op, Object value, Opt... opts) {
             String val = Objects.nonNull(value) ? value.toString() : null;
             val = Objects.nonNull(val) && val.contains(" ") && !val.trim().startsWith("\"")
                     ? String.format("\"%s\"", val)
@@ -315,9 +352,9 @@ public class DataStore {
             logic()
                     .add(name)
                     .add("::")
-                    .add(Arrays.stream(opts).anyMatch(it -> it == Opt.not) ? QueryParser.Expression.NOT : Str.EMPTY)
+                    .add(Arrays.stream(opts).anyMatch(it -> it == Opt.not) ? QueryReader.Expression.NOT : Str.EMPTY)
                     .add(op.name())
-                    .add(Arrays.stream(opts).anyMatch(it -> it == Opt.prop) ? QueryParser.Expression.PROP : Str.EMPTY)
+                    .add(Arrays.stream(opts).anyMatch(it -> it == Opt.prop) ? QueryReader.Expression.PROP : Str.EMPTY)
                     .add(':')
                     .add(val);
             return this;
@@ -343,57 +380,57 @@ public class DataStore {
             if (value == null)
                 return negate ? isNotNull(name) : isNull(name);
 
-            return op(name, QueryParser.Expression.Operator.eq, Safe.of(value).q(Object::toString).val(), opts);
+            return op(name, QueryReader.Expression.Operator.eq, Safe.of(value).q(Object::toString).val(), opts);
         }
 
         public Q<T> gt(String name, Object value, Opt... opts) {
-            return op(name, QueryParser.Expression.Operator.gt, value, opts);
+            return op(name, QueryReader.Expression.Operator.gt, value, opts);
         }
 
         public Q<T> gte(String name, Object value, Opt... opts) {
-            return op(name, QueryParser.Expression.Operator.gte, value, opts);
+            return op(name, QueryReader.Expression.Operator.gte, value, opts);
         }
 
         public Q<T> lt(String name, Object value, Opt... opts) {
-            return op(name, QueryParser.Expression.Operator.lt, value, opts);
+            return op(name, QueryReader.Expression.Operator.lt, value, opts);
         }
 
         public Q<T> lte(String name, Object value, Opt... opts) {
-            return op(name, QueryParser.Expression.Operator.lte, value, opts);
+            return op(name, QueryReader.Expression.Operator.lte, value, opts);
         }
 
         public Q<T> isNull(String name) {
-            logic().add(name).add("::").add(QueryParser.Expression.Operator.isnull.name());
+            logic().add(name).add("::").add(QueryReader.Expression.Operator.isnull.name());
             return this;
         }
 
         public Q<T> isNotNull(String name) {
-            logic().add(name).add("::").add(QueryParser.Expression.NOT).add(QueryParser.Expression.Operator.isnull.name());
+            logic().add(name).add("::").add(QueryReader.Expression.NOT).add(QueryReader.Expression.Operator.isnull.name());
             return this;
         }
 
         public Q<T> contains(String name, String value, Opt... opts) {
-            return op(name, QueryParser.Expression.Operator.contains, value, opts);
+            return op(name, QueryReader.Expression.Operator.contains, value, opts);
         }
 
         public Q<T> iContains(String name, String value, Opt... opts) {
-            return op(name, QueryParser.Expression.Operator.icontains, value, opts);
+            return op(name, QueryReader.Expression.Operator.icontains, value, opts);
         }
 
         public Q<T> startsWith(String name, String value, Opt... opts) {
-            return op(name, QueryParser.Expression.Operator.startswith, value, opts);
+            return op(name, QueryReader.Expression.Operator.startswith, value, opts);
         }
 
         public Q<T> iStartsWith(String name, String value, Opt... opts) {
-            return op(name, QueryParser.Expression.Operator.istartswith, value, opts);
+            return op(name, QueryReader.Expression.Operator.istartswith, value, opts);
         }
 
         public Q<T> endsWith(String name, String value, Opt... opts) {
-            return op(name, QueryParser.Expression.Operator.endswith, value, opts);
+            return op(name, QueryReader.Expression.Operator.endswith, value, opts);
         }
 
         public Q<T> iEndsWith(String name, String value, Opt... opts) {
-            return op(name, QueryParser.Expression.Operator.iendswith, value, opts);
+            return op(name, QueryReader.Expression.Operator.iendswith, value, opts);
         }
 
         public Q<T> or() {
@@ -417,7 +454,7 @@ public class DataStore {
             return this;
         }
 
-        public Paged<T> find(EntityManager em, String...fetch) {
+        public Paged<T> find(EntityManager em, Fetch.Plan fetchPlan) {
             Pager pager = Pager.of();
             if (Objects.nonNull(page))
                 pager.setPage(page);
@@ -428,15 +465,21 @@ public class DataStore {
             if (Objects.nonNull(order) && order.length > 0)
                 pager.withSorting(order);
 
-            return QueryParser.query(str.toString()
+            return QueryReader.query(str.toString()
                     , pager
                     , em
                     , entityClass
-                    , fetch);
+                    , fetchPlan);
+        }
+        public Paged<T> find(EntityManager em) {
+           return find(em, Fetch.Plan.none());
         }
 
-        public Optional<T> findOne(EntityManager em, String...fetch) {
-            return DataStore.findOne(em, entityClass, str.toString(), Pager.of().withSorting(order), fetch);
+        public Optional<T> findOne(EntityManager em, Fetch.Plan fetchPlan) {
+            return DataStore.findOne(em, entityClass, str.toString(), Pager.of().withSorting(order), fetchPlan);
+        }
+        public Optional<T> findOne(EntityManager em) {
+            return findOne(em, Fetch.Plan.none());
         }
 
         public long count(EntityManager em) {

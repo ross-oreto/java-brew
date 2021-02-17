@@ -42,6 +42,13 @@ public class RestResponse<T> implements Notifiable {
         return new RestResponse<T>(StatusCode.BAD_REQUEST);
     }
 
+    public static <T> RestResponse<T> unauthorized() {
+        return new RestResponse<T>(StatusCode.UNAUTHORIZED);
+    }
+    public static <T> RestResponse<T> forbidden() {
+        return new RestResponse<T>(StatusCode.FORBIDDEN);
+    }
+
     public static <T> RestResponse<T> error() {
         return new RestResponse<T>(StatusCode.SERVER_ERROR);
     }

@@ -30,7 +30,7 @@ public class Reflect {
 
         boolean trans;
         boolean _static;
-        boolean _final;
+        boolean _final = true;
         boolean underscore;
         boolean jsonIgnore = true;
 
@@ -125,7 +125,7 @@ public class Reflect {
         return getAllFields(aClass).stream().filter(it -> it.getName().equals(field)).findFirst();
     }
     public static Optional<Field> getField(Object o, String field) {
-        return getField(o.getClass(), field);
+        return o == null ? Optional.empty() : getField(o.getClass(), field);
     }
 
     public static boolean isFieldPublic(Object o, String name) {

@@ -1,12 +1,14 @@
 package io.oreto.brew.data.jpa;
 
+import io.jsonwebtoken.lang.Maps;
 import io.oreto.brew.collections.Lists;
 import io.oreto.brew.data.Paged;
 import io.oreto.brew.data.jpa.repo.*;
-import io.oreto.brew.web.rest.RestResponse;
+import org.hibernate.Session;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.TestPropertySource;
@@ -15,205 +17,283 @@ import javax.annotation.Resource;
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.EntityTransaction;
+import javax.persistence.PersistenceUnitUtil;
 import java.time.LocalDateTime;
-import java.util.HashMap;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.Random;
+import java.util.stream.Collectors;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
-@DataJpaTest
+@DataJpaTest(showSql = true)
 @TestPropertySource(locations = "classpath:application.properties")
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ContextConfiguration
 public class JpaTest {
     private static EntityManager em;
+    private static PersistenceUnitUtil util;
 
     @Resource private EntityManagerFactory entityManagerFactory;
 
+    private final Random random = new Random();
+
     @BeforeEach
-    public void setup() {
+    public void init() {
         em = entityManagerFactory.createEntityManager();
-        DataStore.save(em,
-                new Entity1("test")
-                        .withCreatedBy("me")
-                        .withStrings("test", "ing", "io", "oreto", "brew", "key")
-                        .withEntries(new HashMap<String, String>() {{
-                            put("key", "value");
-                        }})
-                        .withEntity2(new Entity2("oneE2").withEntity3(new Entity3("e2e3a")))
-                        .withEntity2s(Lists.of(
-                                new Entity2("e1")
-                                        .withEntity3(new Entity3("oneE3"))
-                                        .withEntity3s(Lists.of(new Entity3("e3"), new Entity3("e03")))
-                                , new Entity2("e4")
-                                        .withEntity3s(Lists.of(new Entity3("e5")))
-                                , new Entity2("e2"))
-                        )
-        );
+        util = em.getEntityManagerFactory().getPersistenceUnitUtil();
+        reset();
+    }
 
-        DataStore.save(em,
-                new Entity1("test2").withCreatedBy("Tyson")
-                        .withEntity2s(Lists.of(new Entity2("ee")))
-        );
-
-        DataStore.save(em, new Entity4(new Entity4.CompId(1, "abc"), "t1")
-                .withDateTime(LocalDateTime.of(2020, 12, 14, 1, 21, 33)));
-        DataStore.save(em, new Entity4(new Entity4.CompId(2, "d"), "t1"));
+    public void reset() {
+        DataStore.deleteAll(em, Person.class);
+        DataStore.deleteAll(em, Item.class);
+        DataStore.deleteAll(em, Order.class);
+        DataStore.deleteAll(em, Address.class);
     }
 
     @AfterEach
-    public void reset() {
-        DataStore.deleteAll(em, Entity1.class);
-        DataStore.deleteAll(em, Entity2.class);
-        DataStore.deleteAll(em, Entity3.class);
-        DataStore.deleteAll(em, Entity4.class);
-        DataStore.deleteAll(em, Entity5.class);
+    public void close() {
         em.close();
     }
 
     @Test
-    public void query0() {
-        Paged<Entity1> query =
-            DataStore.Q.of(Entity1.class).eq("name", "test").find(em);
-        List<Entity1> result = query.getPage();
-        assertEquals(3, result.get(0).getEntity2s().size());
+    public void listFetch1() {
+        DataStore.save(em,
+                new Person()
+                        .withAddress(new Address().withLine("4th Ave Nashville, TN"))
+                        .withName("Ross").addNickName("Ross Sauce", "Ross Sea").addOrder(
+                                new Order().withAmount(20.01).addItem(new Item().withName("knife")
+                                        .addAttribute("type", "forged"))
+                )
+        );
+        Session session = em.unwrap(Session.class);
+        session.clear();
+
+        Paged<Person> result = DataStore.list(em
+                , Person.class
+                , Fetch.join("nickNames","address", "orders[]")
+                        .at("orders").join("items[]")
+                        .at("orders.items").join("attributes").buildPlan());
+        List<Person> page = result.getPage();
+        session.clear();
+        session.close();
+
+        assertTrue(util.isLoaded(page.get(0).getOrders().get(0).getItems().get(0), "nickNames"));
+        assertTrue(util.isLoaded(page.get(0), "attributes"));
+        assertEquals(Maps.of("type", "forged").build()
+                , page.get(0).getOrders().get(0).getItems().get(0).getAttributes());
+        assertEquals(Lists.of("Ross Sauce", "Ross Sea"), page.get(0).getNickNames());
+        assertEquals("4th Ave Nashville, TN", page.get(0).getAddress().getLine());
+        assertEquals("knife", page.get(0).getOrders().get(0).getItems().get(0).getName());
+    }
+
+    @Test
+    public void listFetch2() {
+        TestData.random(10, 10, 10, em);
+        Paged<Person> result = DataStore.list(em
+                , Person.class
+                , Fetch.get("address", "orders[8:9]").at("orders").get("items[0:5](name:asc)").buildPlan());
+
+        List<Person> page = result.getPage();
+        Session session = em.unwrap(Session.class);
+        session.clear();
+        session.close();
+
+        assertTrue(util.isLoaded(page.get(0), "address"));
+        assertTrue(util.isLoaded(page.get(0), "orders"));
+        assertEquals(2, page.get(0).getOrders().size());
+        assertEquals(5, page.get(0).getOrders().get(0).getItems().size());
+        // make sure the sorting works
+        assertEquals(page.get(0).getOrders().get(0).getItems().stream().map(Item::getName).collect(Collectors.toList())
+                , page.get(0).getOrders().get(0).getItems().stream().sorted(Comparator.naturalOrder()).map(Item::getName)
+                        .collect(Collectors.toList()));
+    }
+
+    @Test
+    public void listFetch3() {
+        TestData.random(10, 2, 2, em);
+        Paged<Person> result = DataStore.list(em
+                , Person.class
+                , Fetch.get("address", "orders[]").at("orders").get("items[]").buildPlan()
+        );
+        List<Person> page = result.getPage();
+
+        Session session = em.unwrap(Session.class);
+        session.clear();
+        session.close();
+
+        assertTrue(util.isLoaded(page.get(0), "address"));
+        assertFalse(page.get(0).getAddress().getLine().isEmpty());
+        assertTrue(util.isLoaded(page.get(0), "orders"));
+        assertEquals(2, page.get(0).getOrders().size());
+        assertEquals(2, page.get(0).getOrders().get(0).getItems().size());
+    }
+
+    @Test
+    public void listFetch4() {
+        TestData.random(5, 1, 5, em);
+
+        Paged<Person> result = DataStore.list(em
+                , Person.class
+                , Fetch.get("address", "orders[]")
+                        .at("orders").get("items[]")
+                        .at("orders.items").get("orders[]").buildPlan());
+        List<Person> page = result.getPage();
+
+        Session session = em.unwrap(Session.class);
+        session.clear();
+        session.close();
+
+        assertTrue(util.isLoaded(page.get(0), "orders"));
+        assertTrue(util.isLoaded(page.get(0), "address"));
+        assertEquals(1, page.get(0).getOrders().size());
+        assertEquals(5, page.get(0).getOrders().get(0).getItems().size());
+        assertEquals(page.get(0).getOrders().get(0), page.get(0).getOrders().get(0).getItems().get(0).getOrders().get(0));
     }
 
     @Test
     public void query1() {
-        Paged<Entity1> query = DataStore.Q.of(Entity1.class)
-                .eq(DataStore.Q.Func.of(Function.count, "entity2s"), 1)
-                .or()
-                .eq("entity2s.entity3s.name", "e5")
+        TestData.setupPeople(em);
+
+        Paged<Person> result = DataStore.Q.of(Person.class)
+                .eq("orders.items.attributes.value", "forged")
                 .find(em);
-        List<Entity1> result = query.getPage();
-        assertEquals(2, result.size());
+        List<Person> page = result.getPage();
+
+        assertEquals(2, page.size());
+        assertEquals("forged", page.get(0).getOrders().get(0).getItems().get(0).getAttributes().get("type"));
     }
 
     @Test
     public void query2() {
-        Paged<Entity2> query = DataStore.Q.of(Entity2.class)
-                .eq("entity3s.name", "e03")
-                .or()
-                .eq(DataStore.Q.Func.of(Function.count, "entity3s"), 0)
-                .find(em);
+        TestData.setupPeople(em);
 
-        List<Entity2> result = query.getPage();
-        assertEquals(4, result.size());
+        Paged<Person> result = DataStore.Q.of(Person.class)
+                .iContains("address.line", "hogwarts")
+                .find(em);
+        List<Person> page = result.getPage();
+
+        assertEquals(3, page.size());
     }
 
     @Test
     public void query3() {
-        Paged<Entity2> query = DataStore.Q.of(Entity2.class)
-                .eq(DataStore.Q.Func.of(Function.count, "entity3s.id"), 2)
+        TestData.setupPeople(em);
+
+        Paged<Person> result = DataStore.Q.of(Person.class)
+                .iContains("address.line", "hogwarts")
                 .or()
-                .eq(DataStore.Q.Func.of(Function.count, "entity3s"), 1)
-                .eq(DataStore.Q.Func.of(Function.count, "entity3s"), 0)
+                .lt(DataStore.Q.Func.of(Function.count, "orders.items"), 2)
                 .find(em);
-        List<Entity2> result = query.getPage();
-        assertEquals(5, result.size());
+        List<Person> page = result.getPage();
+
+        assertEquals(4, page.size());
     }
 
     @Test
     public void query4() {
-        Paged<Entity2> query = DataStore.Q.of(Entity2.class)
-                .endsWith("entity3s.name", "03")
+        TestData.setupPeople(em);
+
+        Paged<Person> result = DataStore.Q.of(Person.class)
+                .iContains("orders.items.name", "ring")
+                .order("name")
                 .find(em);
-        List<Entity2> result = query.getPage();
-        assertEquals(1, result.size());
+        List<Person> page = result.getPage();
+
+        assertEquals(2, page.size());
+        assertEquals("Bilbo", page.get(0).getName());
+        assertEquals("Tom Riddle", page.get(1).getName());
     }
 
     @Test
     public void query5() {
-        Paged<Entity1> query = DataStore.Q.of(Entity1.class)
-                .eq("entries", "key")
-                .find(em, "entries");
-        List<Entity1> result = query.getPage();
-        assertEquals("value", result.get(0).getEntries().get("key"));
+        TestData.setupPeople(em);
+
+        Paged<Person> result = DataStore.Q.of(Person.class)
+                .eq("orders.items.attributes.value", null)
+                .find(em);
+        List<Person> page = result.getPage();
+
+        assertEquals(3, page.size());
     }
 
     @Test
     public void query6() {
-        Paged<Entity1> query = DataStore.Q.of(Entity1.class)
-                .eq("strings", "brew")
-                .find(em, "strings", "entries");
-        List<Entity1> result = query.getPage();
-        assertEquals("value", result.get(0).getEntries().get("key"));
+        TestData.setupPeople(em);
+
+        Paged<Person> result = DataStore.Q.of(Person.class)
+                .eq("nickNames", "The Half Blood Prince")
+                .find(em);
+        List<Person> page = result.getPage();
+
+        assertEquals(1, page.size());
+        assertEquals("Snape", page.get(0).getName());
     }
 
     @Test
     public void query7() {
-        Paged<Entity3> query = DataStore.Q.of(Entity3.class)
-                .isNotNull("name")
-                .find(em);
-        List<Entity3> result = query.getPage();
-        assertEquals(5, result.size());
+        TestData.setupPeople(em);
+        Paged<Person> result = DataStore.findAll(em, Person.class, "name::in:['Bilbo', 'Ross', 'Snape']");
+        assertEquals(3, result.getPage().size());
+
+        result = DataStore.findAll(em, Person.class, "orders.items.name::in:['Hedwig']");
+        assertEquals(1, result.getPage().size());
+        assertEquals("Harry Potter", result.getPage().get(0).getName());
+    }
+
+    @Test
+    public void query8() {
+        TestData.setupPeople(em);
+        long count = DataStore.Q.of(Person.class).count(em);
+
+        assertEquals(count
+                , DataStore.Q.of(Person.class).lt("orders.purchasedOn", LocalDateTime.now())
+                        .find(em).getPager().getCount());
+    }
+
+    @Test
+    public void query9() {
+       TestData.setupVehicles(em);
+
+       Optional<Vehicle> vehicle =
+               DataStore.get(em, Vehicle.class, new Vehicle.VehicleId("Mitsubishi", "Outlander")
+                       , Fetch.get("tire").buildPlan());
+       assertTrue(vehicle.isPresent());
+       assertEquals(20, vehicle.get().getTire().getId().getSize());
+
+       Paged<Vehicle> result = DataStore.Q.of(Vehicle.class).eq("tire.id.make", "Goodyear").find(em);
+       assertFalse(result.getPage().isEmpty());
     }
 
     @Test
     public void crud() {
         DataStore.save(em,
-            new Entity1("test3").withCreatedBy("Link").withEntity2s(Lists.of(new Entity2("e20")))
+                new Person()
+                        .withAddress(new Address().withLine("Kokiri Forest, Hyrule"))
+                        .withName("Link").addNickName("Hero of Time", "Legendary Hero", "Hero of Light").addOrder(
+                        new Order()
+                                .withAmount(1000.01)
+                                .addItem(new Item().withName("Master Sword").addAttribute("type", "forged")
+                                        .addAttribute("special", "Bane of evil"))
+                                .addItem(new Item().withName("Silver Arrow"))
+                                .addItem(new Item().withName("Fairy Bow"))
+                                .addItem(new Item().withName("Hylian Shield"))
+                )
         );
 
-        Entity1 u = DataStore.findOne(em, Entity1.class, "").orElse(null);
+        Person u = DataStore.findOne(em, Person.class, "").orElse(null);
         assert u != null;
         Long id = u.getId();
-        u.setName("update");
+        u.setName("Zelda");
         DataStore.update(em, u);
-        assertEquals("update", DataStore.get(em, Entity1.class, id).get().getName());
+        assertEquals("Zelda", DataStore.get(em, Person.class, id).get().getName());
 
-        Paged<Entity1> paged = DataStore.findAll(em, Entity1.class, "name:test3");
+        Paged<Person> paged = DataStore.findAll(em, Person.class, "name:Zelda");
         assertEquals(1, paged.getPager().getPage());
         DataStore.delete(em, paged.getPage().get(0));
-        assertTrue(DataStore.findAll(em, Entity1.class,"name:test3").getPage().isEmpty());
-    }
-
-    @Test
-    public void list1() {
-        Paged<Entity1> query = DataStore.list(em, Entity1.class, "entity2.entity3s", "strings", "entries");
-        List<Entity1> result = query.getPage();
-        assertEquals("oneE2", result.get(0).getEntity2().getName());
-    }
-
-    @Test
-    public void restTest1() {
-        Entity1Store entity1Store = new Entity1Store(em);
-        RestResponse<Entity1> result;
-
-        result = entity1Store.replace(1L, new Entity1("update").withCreatedBy("me"));
-        assertEquals(true, result.isOk());
-        assertEquals("update", result.getBody().getName());
-        assertEquals("me", result.getBody().getCreatedBy());
-
-        result = entity1Store.update(result.getBody().withName("test"));
-        assertEquals(true, result.isOk());
-        assertEquals("test", result.getBody().getName());
-        assertEquals("me", result.getBody().getCreatedBy());
-
-        assertEquals( new Long(2), DataStore.count(em, Entity1.class));
-    }
-
-    @Test
-    public void restTest2() {
-        Entity5Store entity5Store = new Entity5Store(em);
-
-        RestResponse<Entity5> restResponse = entity5Store.replace(1L, new Entity5());
-        assertEquals(false, restResponse.isOk());
-        restResponse = entity5Store.replace(2L, new Entity5("test"));
-        assertEquals(true, restResponse.isOk());
-    }
-
-    @Test
-    public void idTest() {
-        Optional<Entity4> entity4 = DataStore.get(em, Entity4.class, Entity4.CompId.of(1, "abc"));
-        assertTrue(entity4.isPresent());
-        assertEquals("t1", entity4.get().getTest());
-
-        entity4 = DataStore.Q.of(Entity4.class).eq("dateTime"
-                , LocalDateTime.of(2020, 12, 14, 1, 21, 33)).findOne(em);
-        assertEquals("t1", entity4.get().getTest());
+        assertTrue(DataStore.findAll(em, Person.class,"name:Zelda").getPage().isEmpty());
     }
 
     @Test
@@ -221,18 +301,11 @@ public class JpaTest {
         try {
             EntityTransaction trx = em.getTransaction();
             trx.begin();
-            DataStore.save(em, new Entity5("t1"));
-            DataStore.save(em, new Entity5("t2"));
-            assertEquals(2, DataStore.count(em, Entity5.class));
-            DataStore.save(em, new Entity5());
+            DataStore.save(em, new Person().withName("Link"));
+            DataStore.save(em, new Person());
             trx.commit();
         } catch (Exception ignored) {
         }
-        assertEquals(0, DataStore.count(em, Entity5.class));
-
-        DataStore.save(em, new Entity5("t1"));
-        DataStore.save(em, new Entity5("t2"));
-        DataStore.save(em, new Entity5("t3"));
-        assertEquals(3, DataStore.count(em, Entity5.class));
+        assertEquals(0, DataStore.count(em, Person.class));
     }
 }
