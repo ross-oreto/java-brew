@@ -402,8 +402,7 @@ public class QueryReader {
                 joinFetch(results, fetchPlan.getJoinPaths(), em, em.getCriteriaBuilder(), fetchPlan);
             }
         }
-        return Paged.of(pager.isDistinct() ? results.stream().distinct().collect(Collectors.toList()) : results
-                , pager.isCountEnabled() ? pager.withCount(count(q, em, entityClass)) : pager);
+        return Paged.of(results, pager.isCountEnabled() ? pager.withCount(count(q, em, entityClass)) : pager);
     }
 
     private static <T> void joinFetch(List<T> results

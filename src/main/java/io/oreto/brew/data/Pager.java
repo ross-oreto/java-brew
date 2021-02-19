@@ -53,7 +53,6 @@ public class Pager implements Paginate {
     private boolean zeroBased;
 
     @JsonIgnore private boolean countEnabled = true;
-    @JsonIgnore private boolean distinct;
 
     public Pager() {}
 
@@ -115,16 +114,9 @@ public class Pager implements Paginate {
         this.countEnabled = false;
         return this;
     }
-    public Pager distinct() {
-        this.distinct = true;
-        return this;
-    }
 
     public boolean isCountEnabled() {
         return countEnabled;
-    }
-    public boolean isDistinct() {
-        return distinct;
     }
 
     public Pager withOffset(int offset) {

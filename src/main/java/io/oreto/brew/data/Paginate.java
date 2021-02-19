@@ -13,7 +13,6 @@ public interface Paginate {
     default boolean isZeroBased() {
         return false;
     }
-    boolean isDistinct();
     boolean isCountEnabled();
     default Paginate withCount(long count) {
         setCount(count);
