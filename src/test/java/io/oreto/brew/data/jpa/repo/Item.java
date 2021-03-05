@@ -94,14 +94,14 @@ public class Item implements Model<Long>, Serializable, Comparable<Item>, Compar
         if (!(o instanceof Item)) {
             return false;
         }
-        Item person = (Item) o;
-        return Objects.equals(person.getId(), getId())
-                && Objects.equals(person.getName(), getName());
+        Item item = (Item) o;
+        return Objects.equals(item.getId(), getId())
+                && Objects.equals(item.getName(), getName());
     }
 
     @Override
     public int compare(Item o1, Item o2) {
-        return Comparator.comparing(Item::getName)
+        return Comparator.comparing((Item item) -> item.name)
                 .thenComparing(Item::getId).compare(o1, o2);
     }
 

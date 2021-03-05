@@ -235,10 +235,10 @@ public class DataStore {
         EntityTransaction trx = tryTransaction(entityManager);
         try {
             if (trx == null || trx.isActive())  {
-                entityManager.remove(t);
+                entityManager.remove(entityManager.contains(t) ? t: entityManager.merge(t));
             } else {
                 trx.begin();
-                entityManager.remove(t);
+                entityManager.remove(entityManager.contains(t) ? t: entityManager.merge(t));
                 entityManager.flush();
                 trx.commit();
             }

@@ -1189,24 +1189,27 @@ public class MediaType {
         return new MediaType(contentType);
     }
 
+    private final String type;
     private final byte[] bytes;
-
     private final byte[] httpHeaderBytes;
 
     private MediaType(String contentType) {
+        this.type = contentType;
         this.bytes = contentType.getBytes();
-        this.httpHeaderBytes = ("Content-Type: " + new String(bytes) + "\r\n").getBytes();
+        this.httpHeaderBytes = ("Content-Type: " + type + "\r\n").getBytes();
     }
 
     private MediaType(String name, String[] attributes) {
-        this.bytes = join(name, attributes).getBytes();
-        this.httpHeaderBytes = ("Content-Type: " + new String(bytes) + "\r\n").getBytes();
+        this.type = join(name, attributes);
+        this.bytes = type.getBytes();
+        this.httpHeaderBytes = ("Content-Type: " + type + "\r\n").getBytes();
     }
 
     private String join(String name, String[] attributes) {
         return attributes.length == 0 ? name : name + "; " + String.join("; ", attributes);
     }
 
+    public String getType() { return type; }
     public byte[] getBytes() {
         return bytes;
     }

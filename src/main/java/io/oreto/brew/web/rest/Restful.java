@@ -139,16 +139,16 @@ public interface Restful<ID, T extends Model<ID>> extends Store<ID, T> {
     }
 
     default RestResponse<T> update(ID id, Map<String, Object> fields, Fetch.Plan fetchPlan) {
-        Optional<T> t = Retrieve(id);
-        if (t.isPresent()) {
+        T t = getEntityManager().find(getEntityClass(), id);
+        if (Objects.nonNull(t)) {
             try {
-                Reflect.copy(t.get(), fields, Reflect.CopyOptions.create().mergeCollections());
+                Reflect.copy(t, fields, Reflect.CopyOptions.create().mergeCollections());
             } catch (ReflectiveOperationException e) {
                 RestResponse<T> restResponse = RestResponse.unprocessable();
                 restResponse.withError(e);
                 return restResponse;
             }
-            return update(t.get(), fetchPlan);
+            return update(t, fetchPlan);
         } else {
             return RestResponse.notFound();
         }
@@ -158,16 +158,16 @@ public interface Restful<ID, T extends Model<ID>> extends Store<ID, T> {
     }
 
     default RestResponse<T> update(ID id, T entity, Iterable<String> fields, Fetch.Plan fetchPlan) {
-        Optional<T> t = Retrieve(id);
-        if (t.isPresent()) {
+        T t = getEntityManager().find(getEntityClass(), id);
+        if (Objects.nonNull(t)) {
             try {
-                Reflect.copy(t.get(), entity, fields, Reflect.CopyOptions.create().mergeCollections());
+                Reflect.copy(t, entity, fields, Reflect.CopyOptions.create().mergeCollections());
             } catch (ReflectiveOperationException e) {
                 RestResponse<T> restResponse = RestResponse.unprocessable();
                 restResponse.withError(e);
                 return restResponse;
             }
-            return update(t.get(), fetchPlan);
+            return update(t, fetchPlan);
         } else {
             return RestResponse.notFound();
         }
@@ -196,6 +196,7 @@ public interface Restful<ID, T extends Model<ID>> extends Store<ID, T> {
     }
 
     default RestResponse<T> delete(ID id) {
-       return Retrieve(id).map(this::delete).orElseGet(RestResponse::notFound);
+        T t = getEntityManager().find(getEntityClass(), id);
+        return t == null ? RestResponse.notFound() : delete(t);
     }
 }
