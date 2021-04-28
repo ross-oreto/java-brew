@@ -1,9 +1,16 @@
 package io.oreto.brew.serialize.json;
 
 public interface Jsonable {
-    JsonRenderer json();
-
-    default String renderJson(Object t, String view, String select, String drop) {
-        return json().render(t, view, select, drop);
+    default JsonRenderer json(String name, boolean pretty) {
+        return new JsonRenderer(name, pretty);
+    }
+    default JsonRenderer json(boolean pretty) {
+        return new JsonRenderer(pretty);
+    }
+    default JsonRenderer json(String name) {
+        return json(name, false);
+    }
+    default JsonRenderer json() {
+        return new JsonRenderer();
     }
 }

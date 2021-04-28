@@ -3,9 +3,10 @@ package io.oreto.brew.web.page;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.oreto.brew.obj.Reflect;
 import io.oreto.brew.security.UserDetails;
+import io.oreto.brew.serialize.json.JSON;
 import io.oreto.brew.str.Str;
 import io.oreto.brew.web.page.constants.C;
-import io.oreto.brew.web.route.Routing;
+import io.oreto.brew.web.route.Router;
 
 import java.util.List;
 import java.util.Locale;
@@ -34,16 +35,16 @@ public class ViewModel extends Page {
     public static ViewModel of(Map<String, String> params, Map<String, String> headers) {
         return new ViewModel()
                 .withResourceBundle(ResourceBundle.getBundle(C.messages, parseLocale(params, headers)))
-                .withData(params);
+                .model(params);
     }
 
     public static ViewModel of(Map<String, String> params) {
-        return of().withData(params);
+        return of().model(params);
     }
 
     @JsonIgnore private String view;
 
-    private Routing routing;
+    private Router router;
     private UserDetails user;
 
     protected ViewModel() {}
@@ -57,8 +58,8 @@ public class ViewModel extends Page {
     public String getView() {
         return view;
     }
-    public Routing getRouting() {
-        return routing;
+    public Router getRouter() {
+        return router;
     }
     public UserDetails getUser() {
         return user;
@@ -74,29 +75,29 @@ public class ViewModel extends Page {
         return this;
     }
 
-    public ViewModel withRouting(Routing routing) {
-        this.routing = routing;
+    public ViewModel withRouter(Router router) {
+        this.router = router;
         return this;
     }
 
-    public ViewModel withData(String name, Object value) {
-        getData().put(name, value);
+    public ViewModel model(String name, Object value) {
+        data.put(name, value);
         return this;
     }
 
-    public ViewModel withData(Class<?> cls) {
-        return withData(Reflect.getAllFields(cls).stream()
+    public ViewModel model(Class<?> cls) {
+        return model(Reflect.getAllFields(cls).stream()
                 .filter(field -> Reflect.getGetter(field, cls).isPresent())
                 .map(java.lang.reflect.Field::getName).collect(Collectors.toList()));
     }
 
-    public ViewModel withData(Object o) {
+    public ViewModel model(Object o) {
         for (java.lang.reflect.Field field : Reflect.getAllFields(o)) {
             if (Reflect.getGetter(field, o).isPresent()) {
                 try {
-                    withData(field.getName(), Reflect.getFieldValue(o, field));
+                    model(field.getName(), Reflect.getFieldValue(o, field));
                 } catch (Exception e) {
-                    withData(field.getName(), e);
+                    model(field.getName(), e);
                 }
             }
         }
@@ -104,7 +105,7 @@ public class ViewModel extends Page {
     }
 
     public ViewModel withTitle(String title) {
-        withData(C.title, I18n(resourceBundle, String.format("%s.%s", title, C.title)).orElse(title));
+        model(C.title, I18n(resourceBundle, String.format("%s.%s", title, C.title)).orElse(title));
         return this;
     }
 
@@ -143,12 +144,12 @@ public class ViewModel extends Page {
         return this;
     }
 
-    public boolean submit() {
-        return getForms().stream().allMatch(it -> submit());
+    public boolean validate() {
+        return getForms().stream().allMatch(Form::validate);
     }
 
-    public ViewModel submit(BiConsumer<Boolean, ViewModel> consumer) {
-        consumer.accept(submit(), this);
+    public ViewModel validate(BiConsumer<Boolean, ViewModel> consumer) {
+        consumer.accept(validate(), this);
         return this;
     }
 
@@ -170,10 +171,6 @@ public class ViewModel extends Page {
         return (Form<T>)this.getForms().stream()
                 .filter(it -> it.getName().equals(needle))
                 .findFirst().orElse(null);
-    }
-
-    public Object at(String name) {
-        return getData().get(name);
     }
 
     @Override
@@ -207,7 +204,7 @@ public class ViewModel extends Page {
     }
 
     public ViewModel localize() {
-        Locale locale = this.locale == null ? Locale.US : this.locale;
+        Locale locale = getLocale();
         notifications.forEach(it -> it.localize(locale));
         getForms().forEach(it -> it.localize(locale));
         return this;
@@ -238,19 +235,19 @@ public class ViewModel extends Page {
     }
 
     public String query(String s) {
-        return routing == null || routing.getInfo() == null
+        return router == null || router.getActive() == null
                 ? null
-                : routing.getInfo().getQuery().get(s);
+                : router.getActive().getQuery().get(s);
     }
     public String path(String s) {
-        return routing == null || routing.getInfo() == null
+        return router == null || router.getActive() == null
                 ? null
-                : routing.getInfo().getPathParams().get(s);
+                : router.getActive().getPathParams().get(s);
     }
 
     @Override
-    public ViewModel withData(Map<String, ?> data) {
-        super.withData(data);
+    public ViewModel model(Map<String, ?> data) {
+        super.model(data);
         return this;
     }
 
@@ -276,5 +273,11 @@ public class ViewModel extends Page {
     public ViewModel withNotifications(List<Notification> notifications) {
         super.withNotifications(notifications);
         return this;
+    }
+
+    public Map<String, Object> model() {
+        Map<String, Object> asMap = JSON.asMap(this);
+        asMap.putAll(data);
+        return asMap;
     }
 }

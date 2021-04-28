@@ -10,6 +10,7 @@ import io.oreto.brew.serialize.json.JSON;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -187,6 +188,9 @@ public class Csv<T> {
     }
     public void write(String path, String... more) throws IOException {
         write(Paths.get(path, more));
+    }
+    public void write(PrintWriter printWriter) throws IOException {
+        printWriter.write(writeString());
     }
 
     public static class Options {

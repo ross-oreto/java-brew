@@ -5,6 +5,7 @@ import io.oreto.brew.map.Maps;
 
 import java.util.*;
 import java.util.stream.Collectors;
+
 import static io.oreto.brew.map.Maps.E;
 
 public class Word {

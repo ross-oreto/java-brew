@@ -21,7 +21,7 @@ public class CsvTest {
 
     @Test
     public void read() throws NameNotFoundException {
-        List<Map<String, ?>> stats = Csv.from(io.loadResourceFile("biostats.csv"));
+        List<Map<String, ?>> stats = Csv.from(io.resourceText("biostats.csv").orElse(""));
         assert stats != null;
         assertEquals(18, stats.size());
         assertEquals("38", stats.stream()

@@ -1,15 +1,19 @@
 package io.oreto.brew.web.rest;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.oreto.brew.data.validation.Validator;
+import io.oreto.brew.obj.Safe;
+import io.oreto.brew.serialize.json.Selectable;
 import io.oreto.brew.web.http.StatusCode;
 import io.oreto.brew.web.page.Notifiable;
 import io.oreto.brew.web.page.Notification;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
-public class RestResponse<T> implements Notifiable {
+public class RestResponse<T> implements Notifiable, Selectable {
 
     public static <T> RestResponse<T> ok(T body) {
         return new RestResponse<T>(body);
@@ -52,6 +56,9 @@ public class RestResponse<T> implements Notifiable {
     public static <T> RestResponse<T> error() {
         return new RestResponse<T>(StatusCode.SERVER_ERROR);
     }
+    public static <T> RestResponse<T> error(T body) {
+        return new RestResponse<T>(body, StatusCode.SERVER_ERROR);
+    }
 
     private int status;
     private String reason;
@@ -59,6 +66,43 @@ public class RestResponse<T> implements Notifiable {
     @JsonInclude(JsonInclude.Include.NON_EMPTY)
     private final List<Notification> notifications = new ArrayList<>();
     private boolean ok;
+
+    @JsonIgnore private String _view;
+    @JsonIgnore private String _select;
+    @JsonIgnore private String _drop;
+
+    @Override
+    public String view() {
+        return _view;
+    }
+    public RestResponse<T> view(String _view) {
+        this._view = _view;
+        return this;
+    }
+
+    @Override
+    public String select() {
+        return _select;
+    }
+    public RestResponse<T> select(String _select) {
+        this._select = _select;
+        return this;
+    }
+
+    public RestResponse<T> select(Map<String, Object> params) {
+        return select(Safe.of(params.get("_select")).q(Object::toString).orElse(""))
+                .view(Safe.of(params.get("_view")).q(Object::toString).orElse(""))
+                .drop(Safe.of(params.get("_drop")).q(Object::toString).orElse(""));
+    }
+
+    @Override
+    public String drop() {
+        return _drop;
+    }
+    public RestResponse<T> drop(String _drop) {
+        this._drop = _drop;
+        return this;
+    }
 
     protected RestResponse(T body, int status) {
         withStatus(status);

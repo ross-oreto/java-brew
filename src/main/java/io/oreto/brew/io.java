@@ -1,13 +1,12 @@
 package io.oreto.brew;
 
-import io.oreto.brew.obj.Safe;
-
-import java.io.File;
-import java.net.URL;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 public class io {
     public static void print(String s) { System.out.print(s); }
@@ -27,29 +26,42 @@ public class io {
         return !isWindows();
     }
 
-    public static File loadResourceFile(ClassLoader classLoader, String path, String... resourcePath) {
-        File file = new File(
-                Safe.of(classLoader.getResource(path)).q(URL::getFile)
-                        .orElse(Paths.get(Paths.get(".", resourcePath).toString(), path).toString())
-        );
-        if (!file.exists())
-            file = new File(path);
-        return file;
+    public static Optional<InputStream> loadResource(ClassLoader classLoader, String path, String... resourcePath) {
+        InputStream stream = classLoader.getResourceAsStream(Paths.get(path, resourcePath).toString());
+        return stream == null ? Optional.empty() : Optional.of(stream);
     }
 
-    public static File loadResourceFile(String path, String... resourcePath) {
-        return loadResourceFile(io.class.getClassLoader(), path, resourcePath);
+    public static Optional<InputStream> loadResource(String path, String... resourcePath) {
+        return loadResource(io.class.getClassLoader(), path, resourcePath);
     }
 
-    public static Optional<String> fileText(String path) {
-        try {
-            return Optional.of(String.join("\n", Files.readAllLines(Paths.get(path), StandardCharsets.UTF_8)));
-        } catch (Exception ignored) {
-            return Optional.empty();
-        }
+    public static Optional<List<String>> resourceLines(ClassLoader classLoader, String path, String... resourcePath) {
+        return loadResource(classLoader, path, resourcePath)
+                .map(is -> new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))
+                        .lines().collect(Collectors.toList()));
+    }
+
+    public static Optional<List<String>> resourceLines(String path, String... resourcePath) {
+        return resourceLines(io.class.getClassLoader(), path, resourcePath);
+    }
+
+    public static Optional<String> resourceText(ClassLoader classLoader, String path, String... resourcePath) {
+        return loadResource(classLoader, path, resourcePath)
+                .map(is -> new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))
+                        .lines().collect(Collectors.joining("\n")));
+    }
+
+    public static Optional<String> resourceText(String path, String... resourcePath) {
+        return resourceText(io.class.getClassLoader(), path, resourcePath);
     }
 
     public static Optional<String> fileText(File file) {
-        return fileText(file.getPath());
+        try {
+            return file.exists()
+                    ? Optional.of(String.join("\n", Files.readAllLines(file.toPath())))
+                    : Optional.empty();
+        } catch (IOException ignored) {
+            return Optional.empty();
+        }
     }
 }

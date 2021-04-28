@@ -65,15 +65,15 @@ public class Generator {
         }
         str.space().add("{").br();
 
-        File file = loadInputFile(cOptions);
-        if (file.exists()) {
+        Optional<List<String>> fileLines =  io.resourceLines(cOptions.inputFile);
+        if (fileLines.isPresent()) {
             LinkedHashMap<String, ConstantType> constants = new LinkedHashMap<>();
             Map<String, String> values = new HashMap<>();
             Str tmp = Str.empty();
 
             int i = 0;
             try {
-                for (String line : Files.readAllLines(file.toPath())) {
+                for (String line : fileLines.get()) {
                     i++;
                     if (Str.isBlank(line) || line.trim().startsWith("//")) {
                         String key = String.valueOf(i);
@@ -133,10 +133,6 @@ public class Generator {
             System.out.println(options);
         }
         return cOptions;
-    }
-
-    static File loadInputFile(Options options) {
-        return io.loadResourceFile(options.inputFile, "web","src", "main", "resources");
     }
 
     static Optional<ConstantType> typeFromNumberString(String number) {

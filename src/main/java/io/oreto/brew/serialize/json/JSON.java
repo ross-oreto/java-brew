@@ -5,15 +5,15 @@ import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.*;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
 import io.oreto.brew.serialize.JpaSerializer;
 
-import javax.persistence.EntityManager;
+import javax.persistence.PersistenceUnitUtil;
+import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
 
 public class JSON {
@@ -33,35 +33,62 @@ public class JSON {
         return mapper;
     }
 
-    public static ObjectMapper mapper = mapper();
+    protected static final ObjectMapper mapper = mapper();
+    protected static final Map<String, ObjectMapper> mappers = new HashMap<String, ObjectMapper>(){{ put("", mapper); }};
 
-    public static ObjectMapper jpa(EntityManager entityManager) {
-        mapper.setSerializerFactory(new JpaSerializer(entityManager));
+    public static ObjectReader reader() {
+        return mapper.reader();
+    }
+
+    public static ObjectWriter writer() {
+        return mapper.writer();
+    }
+
+    public static ObjectReader reader(String name) {
+        return mappers.get(name).reader();
+    }
+
+    public static ObjectWriter writer(String name) {
+        return mappers.get(name).writer();
+    }
+
+    public static ObjectMapper jpa(String unit, PersistenceUnitUtil util) {
+        ObjectMapper unitMapper = mapper();
+        unitMapper.setSerializerFactory(new JpaSerializer(util));
+        mappers.put(unit, unitMapper);
+        return unitMapper;
+    }
+
+    public static ObjectMapper jpa(PersistenceUnitUtil util) {
+        mapper.setSerializerFactory(new JpaSerializer(util));
         return mapper;
     }
 
-    public static String asString(Object o, ObjectMapper mapper) throws JsonProcessingException {
-        return mapper.writeValueAsString(o);
+    public static String asString(Object o, boolean pretty) throws JsonProcessingException {
+        return pretty
+                ? mapper.writerWithDefaultPrettyPrinter().writeValueAsString(o)
+                : mapper.writer().writeValueAsString(o);
     }
 
     public static String asString(Object o) throws JsonProcessingException {
-        return asString(o, mapper);
+        return asString(o, false);
     }
+
     public static JsonNode asJson(Object o) { return mapper.valueToTree(o); }
     public static JsonNode asJson(String s) throws JsonProcessingException {
-        return mapper.readTree(s);
+        return mapper.reader().readTree(s);
     }
     public static Map<String, Object> asMap(String s) throws JsonProcessingException {
-        return mapper().readValue(s, new TypeReference<Map<String, Object>>() {});
+        return mapper.readValue(s, new TypeReference<Map<String, Object>>() {});
     }
     public static Map<String, Object> asMap(Object o) {
-        return mapper().convertValue(o, new TypeReference<Map<String, Object>>() {});
+        return mapper.convertValue(o, new TypeReference<Map<String, Object>>() {});
     }
 
     public static <T> T from(Map<String, ?> o, Class<T> tClass) {
         return mapper.convertValue(o, tClass);
     }
-    public static <T> T from(CharSequence s , Class<T> tClass) throws JsonProcessingException {
-        return mapper().readValue(s.toString(), tClass);
+    public static <T> T from(CharSequence s , Class<T> tClass) throws IOException {
+        return mapper.reader().readValue(s.toString(), tClass);
     }
 }

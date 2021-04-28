@@ -2,6 +2,9 @@ package io.oreto.brew.serialize.json;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectReader;
+import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.oreto.brew.map.MultiString;
@@ -14,68 +17,136 @@ import java.util.stream.StreamSupport;
 
 public class JsonRenderer {
 
-    public JsonRenderer() { }
+    private final String name;
+    private boolean pretty;
+
+    public JsonRenderer(String name, boolean pretty) {
+        this.name = name;
+        this.pretty = pretty;
+    }
+    public JsonRenderer(boolean pretty) {
+        this("", pretty);
+    }
+    public JsonRenderer() {
+        this("", false);
+    }
+
+    public JsonRenderer pretty(boolean pretty) {
+       this.pretty = pretty;
+       return this;
+    }
+
+    protected ObjectMapper mapper() {
+       return JSON.mappers.get(this.name);
+    }
+    protected ObjectReader reader() {
+        return JSON.reader(this.name);
+    }
+    protected ObjectWriter writer() {
+        return JSON.writer(this.name);
+    }
+
+    protected String asString(Object o, boolean pretty) throws JsonProcessingException {
+        return pretty
+                ? mapper().writerWithDefaultPrettyPrinter().writeValueAsString(o)
+                : mapper().writer().writeValueAsString(o);
+    }
 
     public String render(Object o, String view, String selectValue, String dropValue) {
         if (!Str.isBlank(view)) {
             List<JsonNode> picks = new ArrayList<>();
 
-            ObjectNode element = o instanceof ObjectNode ? (ObjectNode) o : (ObjectNode) JSON.asJson(o);
-            track(new ArrayList<ObjectNode>() {{
-                add(element);
-            }}, "", picker(view), picks);
+            Object node = mapper().valueToTree(o);
+            List<ObjectNode> elements;
+            if (node instanceof ObjectNode) {
+                elements = new ArrayList<ObjectNode>() {{
+                    add((ObjectNode) node);
+                }};
+            } else if (node instanceof ArrayNode) {
+                elements = StreamSupport.stream(((ArrayNode) node).spliterator(), false)
+                        .filter(it -> it instanceof ObjectNode)
+                        .map(it -> (ObjectNode) it).collect(Collectors.toList());
+                Str str = Str.of(view).trim();
+                if (str.startsWith("[") && str.endsWith("]")) {
+                    String[] range = str.subSequence(1, str.length() - 1).toString().split(":");
+                    int start = Str.toInteger(range[0]).orElse(1) - 1;
+                    int end = range.length > 1 ? Str.toInteger(range[1]).orElse(start) : start;
+                    o = end - start < 2 ? elements.get(start) : elements.subList(start, end);
+                    view = null;
+                }
+            } else {
+                elements = new ArrayList<>();
+            }
+            if (Objects.nonNull(view))
+                track(elements, "", picker(view), picks);
             int size = picks.size();
             if (size == 1) o = picks.get(0);
             else if (size > 1) {
-                ArrayNode jsonArray = JSON.mapper.createArrayNode();
+                ArrayNode jsonArray = (ArrayNode) reader().createArrayNode();
                 picks.forEach(jsonArray::add);
                 o = jsonArray;
             }
         }
         if ((Str.isBlank(dropValue) || o == null) && Str.isBlank(selectValue)) {
             try {
-                return o instanceof ObjectNode ? o.toString() : JSON.asString(o);
+                return o instanceof ObjectNode ? o.toString() : this.asString(o, pretty);
             } catch (JsonProcessingException ignored) {
                 return null;
             }
         } else {
-            ObjectNode element = o instanceof ObjectNode ? (ObjectNode) o : (ObjectNode) JSON.asJson(o);
-            List<ObjectNode> json = element.isArray()
-                    ? StreamSupport.stream((element).spliterator(), false)
-                    .map(it -> (ObjectNode) it).collect(Collectors.toList())
-                    : new ArrayList<ObjectNode>() {{
-                add(element);
-            }};
+            List<ObjectNode> json;
+            if (o instanceof ObjectNode) {
+                ObjectNode element = (ObjectNode) o;
+                json = new ArrayList<ObjectNode>() {{
+                    add(element);
+                }};
+            } else if(o instanceof ArrayNode) {
+                ArrayNode element = (ArrayNode) o;
+                json = StreamSupport.stream(element.spliterator(), false)
+                        .filter(it -> it instanceof ObjectNode)
+                        .map(it -> (ObjectNode) it).collect(Collectors.toList());
+            } else {
+                JsonNode element = mapper().valueToTree(o);
+                json = element.isArray()
+                        ? StreamSupport.stream(element.spliterator(), false)
+                        .filter(it -> it instanceof ObjectNode)
+                        .map(it -> (ObjectNode) it).collect(Collectors.toList())
+                        : new ArrayList<ObjectNode>() {{
+                    add((ObjectNode) element);
+                }};
+            }
 
             if (!Str.isBlank(selectValue) && !Str.isBlank(dropValue)) {
-                JsonNode copy = json.size() == 1 ? JSON.mapper.createObjectNode() : JSON.mapper.createArrayNode();
+                JsonNode copy = json.size() == 1 ? reader().createObjectNode() : reader().createArrayNode();
                 walk(json, "", picker(selectValue), copy);
 
                 json = copy instanceof ObjectNode
-                        ? new ArrayList<ObjectNode>() {{
-                    add((ObjectNode) copy);
-                }}
+                        ? new ArrayList<ObjectNode>() {{ add((ObjectNode) copy); }}
                         : StreamSupport.stream((copy).spliterator(), false)
+                        .filter(it -> it instanceof ObjectNode)
                         .map(it -> (ObjectNode) it)
                         .collect(Collectors.toList());
 
                 track(json, "", picker(dropValue), null);
-                return json.size() == 1 ? json.get(0).toString() : json.toString();
-
+                return json.size() == 1 ? json.get(0).toString() : render(json);
             } else if (!Str.isBlank(selectValue)) {
-                JsonNode copy = json.size() == 1 ? JSON.mapper.createObjectNode() : JSON.mapper.createArrayNode();
+                JsonNode copy = json.size() == 1 ? reader().createObjectNode() : reader().createArrayNode();
                 walk(json, "", picker(selectValue), copy);
                 return copy.toString();
             } else {
                 track(json, "", picker(dropValue), null);
-                return json.size() == 1 ? json.get(0).toString() : json.toString();
+                return json.size() == 1 ? json.get(0).toString() : render(json);
             }
         }
     }
 
     public String render(Object o)  {
         try {
-            return JSON.asString(o);
+            if (o instanceof Selectable) {
+               Selectable selectable = (Selectable) o;
+               return render(o, selectable.view(), selectable.select(), selectable.drop());
+            }
+            return this.asString(o, pretty);
         } catch (JsonProcessingException ignored) {
             return null;
         }
@@ -185,7 +256,9 @@ public class JsonRenderer {
     private String resolveAddress(String path, String address) {
         return "".equals(path) ? address : String.format("%s.%s", path, address);
     }
-    private String address(Stack<String> stack) { return String.join(".", stack); }
+    private String address(Stack<String> stack) {
+        return stack.stream().filter(it-> !it.isEmpty()).collect(Collectors.joining("."));
+    }
     private void addFields(String fields, MultiString<String> picks, String currentAddress) {
         for (String field : fields.trim().split("[ \n\r]")) {
             picks.put(currentAddress, field.trim());
@@ -237,17 +310,22 @@ public class JsonRenderer {
             , String path, Map<String, List<String>> pathMap, List<ObjectNode> newNodes
             , String property, String address) {
         newNodes.add(node);
-        ObjectNode newObject = JSON.mapper.createObjectNode();
+        ObjectNode newObject = (ObjectNode) reader().createObjectNode();
         copy.set(property, newObject);
         walk(newNodes, resolveAddress(path, address), pathMap, newObject);
     }
 
     protected void walk(ObjectNode node, ArrayNode copy, String path, Map<String, List<String>> pathMap
             , List<ObjectNode> newNodes, String property, String address) {
-        newNodes.add(node);
-        ObjectNode newObject = JSON.mapper.createObjectNode();
-        addElement(copy, property, newObject);
-        walk(newNodes, resolveAddress(path, address), pathMap, newObject);
+        for(JsonNode jsonNode : copy) {
+            if (!jsonNode.has(property)) {
+                newNodes.add(node);
+                ObjectNode newObject = (ObjectNode) reader().createObjectNode();
+                ((ObjectNode)jsonNode).set(property, newObject);
+                walk(newNodes, resolveAddress(path, address), pathMap, newObject);
+                break;
+            }
+        }
     }
 
     protected void walk(ArrayNode node, ArrayNode copy
@@ -259,10 +337,13 @@ public class JsonRenderer {
         else subset.getValue().size(node.size()).stream()
                 .forEach(it -> newNodes.add((ObjectNode) node.get(it)));
 
-        for (JsonNode ignored : node) {
-            ObjectNode newObject = JSON.mapper.createObjectNode();
-            addElement(copy, property, newObject);
-            walk(newNodes, resolveAddress(path, address), pathMap, newObject);
+        for(JsonNode jsonNode : copy) {
+            if (!jsonNode.has(property)) {
+                ArrayNode newArray = (ArrayNode) reader().createArrayNode();
+                ((ObjectNode)jsonNode).set(property, newArray);
+                walk(newNodes, resolveAddress(path, address), pathMap, newArray);
+                break;
+            }
         }
     }
 
@@ -274,7 +355,7 @@ public class JsonRenderer {
         else subset.getValue().size(node.size()).stream()
                 .forEach(it -> newNodes.add((ObjectNode) node.get(it)));
 
-        ArrayNode newArray = JSON.mapper.createArrayNode();
+        ArrayNode newArray = (ArrayNode) reader().createArrayNode();
         if (copy.has(property)) {
             newArray = (ArrayNode) copy.get(property);
         } else
@@ -291,20 +372,20 @@ public class JsonRenderer {
                         JsonNode element = node.get(property);
                         if (element instanceof ArrayNode && subset != null) {
                             ArrayNode jsonArray = (ArrayNode) element;
-                            ArrayNode newArray = JSON.mapper.createArrayNode();
+                            ArrayNode newArray = (ArrayNode) reader().createArrayNode();
                             for (int it : subset.getValue().size(jsonArray.size()).stream().toArray()) {
                                 newArray.add(jsonArray.get(it));
                             }
                             return new AbstractMap.SimpleEntry<String, JsonNode>(property, newArray);
                         } else
                             return new AbstractMap.SimpleEntry<>(property, element);
-                    }).collect(Collectors.toList());
+                    }).filter(it -> !it.getKey().isEmpty()).collect(Collectors.toList());
 
             if (elements.size() > 0) {
-                if (copy instanceof ObjectNode) {
-                    addElement((ObjectNode) copy, elements);
-                } else if (copy instanceof ArrayNode) {
+                if (copy instanceof ArrayNode) {
                     addElement((ArrayNode) copy, elements);
+                } else if (copy instanceof ObjectNode) {
+                    addElement((ObjectNode) copy, elements);
                 }
             }
         }
@@ -340,7 +421,7 @@ public class JsonRenderer {
     }
 
     private void addElement(ArrayNode jsonArray, List<Map.Entry<String, JsonNode>> elements) {
-        ObjectNode jsonObject = JSON.mapper.createObjectNode();
+        ObjectNode jsonObject = (ObjectNode) reader().createObjectNode();
         elements.forEach(it -> jsonObject.set(it.getKey(), it.getValue()));
         jsonArray.add(jsonObject);
     }
@@ -350,7 +431,7 @@ public class JsonRenderer {
     }
 
     private void addElement(ArrayNode jsonArray, String property, JsonNode element) {
-        ObjectNode jsonObject = JSON.mapper.createObjectNode();
+        ObjectNode jsonObject = (ObjectNode) reader().createObjectNode();
         jsonObject.set(property, element);
         jsonArray.add(jsonObject);
     }

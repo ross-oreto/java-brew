@@ -25,7 +25,7 @@ public class Form<T> implements Notifiable, Validatable {
 
     protected String name;
     protected List<Field> fields = new ArrayList<>();
-    protected T data;
+    protected T model;
 
     @JsonIgnore
     protected List<Validator<?>> validators = new ArrayList<>();
@@ -43,11 +43,11 @@ public class Form<T> implements Notifiable, Validatable {
     public List<Field> fields() { return fields; }
     public List<Validator<?>> validators() { return validators; }
 
-    public T getData() {
-        return data;
+    public T getModel() {
+        return model;
     }
 
-    public Form<T> withData(T data) { this.data = data; return this; }
+    public Form<T> withModel(T data) { this.model = data; return this; }
     public Form<T> withLocale(Locale locale) { this.locale = locale; return this; }
 
     public <V> Form<T> withValidator(Validator<V> validator) {
@@ -56,18 +56,18 @@ public class Form<T> implements Notifiable, Validatable {
     }
 
     public <V> Form<T> withValidator(Function<T, Validator<V>> validator) {
-        this.validators.add(validator.apply(data).group(name));
+        this.validators.add(validator.apply(model).group(name));
         return this;
     }
 
     public boolean validate(Locale locale) {
         // check data object for validatable implementation
-        if (data instanceof Validatable) {
-            validators.addAll(((Validatable) data).validators());
+        if (model instanceof Validatable) {
+            validators.addAll(((Validatable) model).validators());
         }
 
         // validate data object using annotations
-        for(Validator.Invalid invalid : Validator.validate(data)) {
+        for(Validator.Invalid invalid : Validator.validate(model)) {
            withValidationError(invalid);
         }
 

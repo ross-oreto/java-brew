@@ -2,12 +2,12 @@ package io.oreto.brew.obj;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.oreto.brew.collections.Lists;
+import io.oreto.brew.str.Noun;
 import io.oreto.brew.str.Str;
 
 import java.lang.annotation.Annotation;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
+import java.lang.reflect.*;
+import java.time.temporal.Temporal;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
@@ -83,6 +83,35 @@ public class Reflect {
             underscore = false;
             return this;
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void parameterNames(Map<String, Object> paramMap, String path, List<String> names) {
+        for (String key : paramMap.keySet()) {
+            Object val = paramMap.get(key);
+            if (val instanceof List) {
+                List<?> items = (List<?>) val;
+                if (items.size() > 0 && items.get(0) instanceof Map) {
+                    parameterNames((Map<String, Object>) items.get(0)
+                            , Str.isEmpty(path) ? key : String.format("%s.%s", path, key)
+                            , names);
+                } else {
+                    names.add(Str.isEmpty(path) ? key : String.format("%s.%s", path, key));
+                }
+            } else if (val instanceof Map) {
+                parameterNames((Map<String, Object>) val
+                        , Str.isEmpty(path) ? key : String.format("%s.%s", path, key)
+                        , names);
+            } else {
+                names.add(Str.isEmpty(path) ? key : String.format("%s.%s", path, key));
+            }
+        }
+    }
+
+    public static List<String> parameterNames(Map<String, Object> paramMap) {
+        List<String> names = new ArrayList<>();
+        parameterNames(paramMap, "", names);
+        return names.stream().distinct().collect(Collectors.toList());
     }
 
     private static List<Field> getAllFields(Class<?> aClass, List<Field> fields, Allow allow) {
@@ -226,6 +255,99 @@ public class Reflect {
         return getField(cls, name).flatMap(value -> getSetter(value, cls));
     }
 
+    private static Optional<Method> getAddRemoveMethod(String name, Field field, Class<?> cls) {
+        ParameterizedType parameterizedType = (ParameterizedType) field.getGenericType();
+        Type[] genericTypes = parameterizedType.getActualTypeArguments();
+
+        for (Method method : cls.getMethods()) {
+            Class<?> param = method.getParameterCount() > 0 ? method.getParameterTypes()[0] : null;
+            if (Objects.nonNull(param)) {
+                String methodName = Str.of(Noun.singular(field.getName())).capitalize().preface(name).toString();
+                if (method.getName().equals(methodName)) {
+                    if (methodTypeMatches(param.isArray() && method.isVarArgs()
+                            ? param.getComponentType() : param, (Class<?>) genericTypes[0])) {
+                        return Optional.of(method);
+                    }
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    public static Optional<Method> getAdder(Field field, Class<?> cls) {
+        return getAddRemoveMethod("add", field, cls);
+    }
+
+    public static Optional<Method> getAdder(Field field, Object o) {
+        return getAdder(field, o.getClass());
+    }
+
+    public static Optional<Method> getAdder(String name, Object o) {
+        return getField(o, name).flatMap(value -> getAdder(value, o));
+    }
+
+    public static Optional<Method> getAdder(String name, Class<?> cls) {
+        return getField(cls, name).flatMap(value -> getAdder(value, cls));
+    }
+
+    private static Object newArray(Object value, Class<?> type) {
+        Object varargs = Array.newInstance(type, 1);
+        Array.set(varargs, 0, value);
+        return varargs;
+    }
+
+    public static void addFieldValue(Object o, Field field, Object value) throws ReflectiveOperationException {
+        Optional<Method> method = getAdder(field, o);
+        if (method.isPresent()) {
+            if (method.get().isVarArgs()) {
+                method.get().invoke(o, newArray(value, method.get().getParameterTypes()[0].getComponentType()));
+            } else {
+                method.get().invoke(o, value);
+            }
+            return;
+        }
+        throw new NoSuchMethodException(String.format("No add method found for %s", field.getName()));
+    }
+
+    public static void addFieldValue(Object o, String field, Object value)
+            throws ReflectiveOperationException {
+        addFieldValue(o, getField(o, field).orElseThrow(() -> new NoSuchFieldException("no such field " + field)), value);
+    }
+
+    public static Optional<Method> getRemover(Field field, Class<?> cls) {
+        return getAddRemoveMethod("remove", field, cls);
+    }
+
+    public static Optional<Method> getRemover(Field field, Object o) {
+        return getRemover(field, o.getClass());
+    }
+
+    public static Optional<Method> getRemover(String name, Object o) {
+        return getField(o, name).flatMap(value -> getRemover(value, o));
+    }
+
+    public static Optional<Method> getRemover(String name, Class<?> cls) {
+        return getField(cls, name).flatMap(value -> getRemover(value, cls));
+    }
+
+    public static void removeFieldValue(Object o, Field field, Object value) throws ReflectiveOperationException {
+        Optional<Method> method = getRemover(field, o);
+        if (method.isPresent()) {
+            if (method.get().isVarArgs()) {
+                method.get().invoke(o, newArray(value, method.get().getParameterTypes()[0].getComponentType()));
+            } else {
+                method.get().invoke(o, value);
+            }
+            return;
+        }
+        throw new NoSuchMethodException(String.format("No remove method found for %s", field.getName()));
+    }
+
+    public static void removeFieldValue(Object o, String field, Object value)
+            throws ReflectiveOperationException {
+        removeFieldValue(o, getField(o, field).orElseThrow(() -> new NoSuchFieldException("no such field " + field)), value);
+    }
+
     public static void setFieldValue(Object o, Field field, Object value)
             throws ReflectiveOperationException {
 
@@ -245,12 +367,31 @@ public class Reflect {
         setFieldValue(o, getField(o, field).orElseThrow(() -> new NoSuchFieldException("no such field " + field)), value);
     }
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
     public static void copy(Object o1, Object o2, Iterable<String> names, CopyOptions copyOptions)
             throws ReflectiveOperationException {
-        Set<String> nameSet = StreamSupport.stream(names.spliterator(), false).collect(Collectors.toSet());
+        copy(o1, o2, names, copyOptions, new HashMap<>());
+    }
 
-        Iterable<Field> iterable = names.iterator().hasNext() ? getAllFields(o1, copyOptions.ignore).stream()
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static void copy(Object o1
+            , Object o2
+            , Iterable<String> names
+            , CopyOptions copyOptions
+            , Map<Object, Object> visited)
+            throws ReflectiveOperationException {
+        if (o1 == null || o2 == null || visited.containsKey(o2))
+            return;
+        else
+            visited.put(o2, o2);
+
+        Set<String> nameSet = names == null
+                ? new HashSet<>()
+                : StreamSupport.stream(names.spliterator(), false)
+                .map(it -> Lists.subLists(Arrays.asList(it.split("\\."))))
+                .flatMap(it -> it.stream().map(sublist -> String.join(".", sublist)))
+                .collect(Collectors.toSet());
+
+        Iterable<Field> iterable = Objects.nonNull(names) && names.iterator().hasNext() ? getAllFields(o1, copyOptions.ignore).stream()
                 .filter(it -> isFieldPublic(it) || (getSetter(it, o1).isPresent() && getGetter(it, o1).isPresent()))
                     .filter(it -> copyOptions.exclusion != nameSet.contains(it.getName()))
                     .collect(Collectors.toSet())
@@ -259,26 +400,79 @@ public class Reflect {
                     .collect(Collectors.toSet());
 
         for (Field field : iterable) {
-            if (!copyOptions.nullsOnly || Obj.notInitialized(getFieldValue(o1, field))) {
-                if (copyOptions.mergeCollections && List.class.isAssignableFrom(field.getType())) {
-                    List l1 = (List) getFieldValue(o1, field);
-                    List l2 = (List) getFieldValue(o2, field);
-                    if (Objects.nonNull(l1) && Objects.nonNull(l2))
-                        l1.addAll(l2);
-                } else if (copyOptions.mergeCollections && Set.class.isAssignableFrom(field.getType())) {
-                    Set s1 = (Set) getFieldValue(o1, field);
-                    Set s2 = (Set) getFieldValue(o2, field);
-                    if (Objects.nonNull(s1) && Objects.nonNull(s2))
-                        s1.addAll(s2);
+            Object v1 = getFieldValue(o1, field);
+            Object v2 = getFieldValue(o2, field);
+            if (!copyOptions.nullsOnly || Obj.notInitialized(v1)) {
+                if (copyOptions.mergeCollections && Collection.class.isAssignableFrom(field.getType())) {
+                    Collection l1 = (Collection) v1;
+                    Collection l2 = (Collection) v2;
+                    if (Objects.nonNull(l1) && Objects.nonNull(l2)) {
+                        boolean hasAdder = Reflect.getAdder(field, o1).isPresent();
+                        boolean hasRemover = Reflect.getRemover(field, o1).isPresent();
+                        for(Object it : l2) {
+                            if(l1.contains(it) && !isPrimitive(field.getType())) {
+                                String childPath = String.format("%s.", field.getName());
+                                Iterable<String> children = nameSet.stream()
+                                        .filter(name -> name.startsWith(childPath))
+                                        .map(name -> name.replaceFirst(childPath, ""))
+                                        .collect(Collectors.toSet());
+                                Reflect.copy(l1.stream().filter(o -> o.equals(it)).findFirst().orElse(null)
+                                        , it
+                                        , children.iterator().hasNext() ? children : null
+                                        , copyOptions
+                                        , visited);
+                            } else {
+                                if(hasAdder)
+                                    Reflect.addFieldValue(o1, field, it);
+                                else
+                                    l1.add(it);
+                            }
+                        }
+                        if (copyOptions.updateCollections) {
+                            Object[] removals = l1.stream().filter(it -> !l2.contains(it)).toArray();
+                            for (Object removal : removals) {
+                                if(hasRemover) Reflect.removeFieldValue(o1, field, removal);
+                                else l1.remove(removal);
+                            }
+                        }
+                    }
                 } else if (copyOptions.mergeCollections && Map.class.isAssignableFrom(field.getType())) {
-                    Map m1 = (Map) getFieldValue(o1, field);
-                    Map m2 = (Map) getFieldValue(o2, field);
+                    Map m1 = (Map) v1;
+                    Map m2 = (Map) v2;
                     if (Objects.nonNull(m1) && Objects.nonNull(m2))
                         m1.putAll(m2);
-                } else
-                    setFieldValue(o1, field, getFieldValue(o2, field));
+                    if (copyOptions.updateCollections) {
+                        Object[] keys = m1.keySet().stream().filter(it -> !m2.containsKey(it)).toArray();
+                        for (Object key : keys)
+                            m1.remove(key);
+                    }
+                } else {
+                    if (isPrimitive(field.getType())) {
+                        if (!Objects.equals(v1, v2)) {
+                            setFieldValue(o1, field, v2);
+                        }
+                    } else {
+                        String childPath = String.format("%s.", field.getName());
+                        Iterable<String> children = nameSet.stream()
+                                .filter(name -> name.startsWith(childPath))
+                                .map(name -> name.replaceFirst(childPath, ""))
+                                .collect(Collectors.toSet());
+                        Reflect.copy(v1
+                                , v2
+                                , children.iterator().hasNext() ? children : null
+                                , copyOptions
+                                , visited);
+                    }
+                }
             }
         }
+    }
+
+    public static boolean isPrimitive(Class<?> type) {
+        return type.isPrimitive()
+                || CharSequence.class.isAssignableFrom(type)
+                || Date.class.isAssignableFrom(type)
+                || Temporal.class.isAssignableFrom(type);
     }
 
     public static void copy(Object o1, Object o2, Iterable<String> names)
@@ -302,7 +496,7 @@ public class Reflect {
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
-    public static void copy(Object o1, Map<String, Object> values, CopyOptions copyOptions)
+    private static void copy(Object o1, Map<String, Object> values, CopyOptions copyOptions)
             throws ReflectiveOperationException {
 
         Iterable<Field> iterable = getAllFields(o1, copyOptions.ignore).stream()
@@ -311,18 +505,42 @@ public class Reflect {
                 .collect(Collectors.toSet());
 
         for (Field field : iterable) {
-            if (!copyOptions.nullsOnly || Obj.notInitialized(getFieldValue(o1, field))) {
-                if (copyOptions.mergeCollections && List.class.isAssignableFrom(field.getType())) {
-                    List l1 = (List) getFieldValue(o1, field);
-                    l1.addAll((List) values.get(field.getName()));
-                } else if (copyOptions.mergeCollections && Set.class.isAssignableFrom(field.getType())) {
-                    Set s1 = (Set) getFieldValue(o1, field);
-                    s1.addAll((Set) values.get(field.getName()));
+            Object v1 = getFieldValue(o1, field);
+            Object v2 = values.get(field.getName());
+            if (!copyOptions.nullsOnly || Obj.notInitialized(v1)) {
+                if (copyOptions.mergeCollections && Collection.class.isAssignableFrom(field.getType())) {
+                    boolean hasAdder = Reflect.getAdder(field, o1).isPresent();
+                    boolean hasRemover = Reflect.getRemover(field, o1).isPresent();
+                    Collection l1 = (Collection) v1;
+                    Collection l2 = (Collection) v2;
+                    for(Object it : l2) {
+                        if(!l1.contains(it)) {
+                            if(hasAdder)
+                                Reflect.addFieldValue(o1, field, it);
+                            else
+                                l1.add(it);
+                        }
+                    }
+                    if (copyOptions.updateCollections) {
+                        Object[] removals = l1.stream().filter(it -> !l2.contains(it)).toArray();
+                        for (Object removal : removals) {
+                            if(hasRemover) Reflect.removeFieldValue(o1, field, removal);
+                            else l1.remove(removal);
+                        }
+                    }
                 } else if (copyOptions.mergeCollections && Map.class.isAssignableFrom(field.getType())) {
-                    Map m1 = (Map) getFieldValue(o1, field);
-                    m1.putAll((Map) values.get(field.getName()));
-                } else
-                    setFieldValue(o1, field, values.get(field.getName()));
+                    Map m1 = (Map) v1;
+                    Map m2 = (Map) v2;
+                    m1.putAll(m2);
+                    if (copyOptions.updateCollections) {
+                        Object[] keys = m1.keySet().stream().filter(it -> !m2.containsKey(it)).toArray();
+                        for (Object key : keys)
+                            m1.remove(key);
+                    }
+                } else {
+                    if (!Objects.equals(v1, v2))
+                        setFieldValue(o1, field, v2);
+                }
             }
         }
     }
@@ -339,6 +557,7 @@ public class Reflect {
 
         private boolean nullsOnly;
         private boolean mergeCollections;
+        private boolean updateCollections;
         private boolean exclusion;
         private Allow ignore;
 
@@ -354,6 +573,11 @@ public class Reflect {
         public CopyOptions mergeCollections() {
             mergeCollections = true;
             return this;
+        }
+
+        public CopyOptions updateCollections() {
+            updateCollections = true;
+            return mergeCollections();
         }
 
         public CopyOptions exclusion() {

@@ -3,6 +3,7 @@ package io.oreto.brew.data.jpa;
 import io.oreto.brew.data.Paged;
 import io.oreto.brew.data.Pager;
 import io.oreto.brew.data.Paginate;
+import io.oreto.brew.data.Sortable;
 import io.oreto.brew.obj.Reflect;
 import io.oreto.brew.obj.Safe;
 import io.oreto.brew.str.Str;
@@ -10,6 +11,7 @@ import io.oreto.brew.str.Str;
 import javax.persistence.*;
 import java.lang.reflect.Field;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -367,6 +369,11 @@ public class DataStore {
 
         public Q<T> order(String... order) {
             this.order = order;
+            return this;
+        }
+
+        public Q<T> order(List<Sortable> order) {
+            this.order = order.stream().map(Sortable::toString).toArray(String[]::new);
             return this;
         }
 

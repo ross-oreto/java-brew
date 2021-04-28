@@ -1,8 +1,7 @@
 package io.oreto.brew.map;
 
-import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 public class Maps {
     public static class E<K, V> {
@@ -29,6 +28,9 @@ public class Maps {
 
     @SafeVarargs
     public static <K, V> Map<K, V> of(E<K, V>... entries) {
-        return Arrays.stream(entries).collect(Collectors.toMap(E::key, E::val));
+        Map<K, V> kvMap = new LinkedHashMap<>();
+        for (E<K, V> entry : entries)
+            kvMap.put(entry.key, entry.val);
+        return kvMap;
     }
 }

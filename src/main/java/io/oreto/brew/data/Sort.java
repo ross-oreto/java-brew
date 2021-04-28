@@ -12,7 +12,7 @@ public class Sort implements Sortable {
 
     public static Sortable of(String s) {
         Sort sort = new Sort();
-        String[] sorts = s.split(",");
+        String[] sorts = s.split(":");
         sort.name = sorts[0];
         sort.direction = sorts.length > 1 && sorts[1].toLowerCase().equals(Direction.desc.name())
                 ? Direction.desc
@@ -35,6 +35,11 @@ public class Sort implements Sortable {
 
     private String name;
     private Direction direction = Direction.asc;
+
+    @Override
+    public String toString() {
+        return String.format("%s:%s", name, direction.name());
+    }
 
     @Override
     public String getName() {

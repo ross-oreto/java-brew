@@ -77,7 +77,7 @@ public class NamedRoute implements Comparable<NamedRoute>, Comparator<NamedRoute
     }
 
     public String with(String... args) {
-        return Routing.reverse(path, (Object[]) args);
+        return Router.reverse(path, (Object[]) args);
     }
 
     public String by(String args) {

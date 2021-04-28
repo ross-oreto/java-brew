@@ -74,7 +74,7 @@ public class Jwt {
             return (T) new Anonymous();
         try {
             Claims claims = readJwt(key, jwt);
-            return JSON.mapper.readValue(claims.get(C.user).toString(), userClass);
+            return JSON.reader().readValue(claims.get(C.user).toString(), userClass);
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }

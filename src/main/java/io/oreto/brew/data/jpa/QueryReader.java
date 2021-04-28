@@ -24,6 +24,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @SuppressWarnings({"unchecked", "rawtypes"})
 public class QueryReader {
@@ -287,7 +288,7 @@ public class QueryReader {
         CriteriaBuilder builder = em.getCriteriaBuilder();
         CriteriaQuery<Long> countQuery = builder.createQuery(Long.class);
         Root<T> root = countQuery.from(entityClass);
-        countQuery.select(builder.count(root));
+        countQuery.select(builder.countDistinct(root));
 
         Predicates predicates = parse(new QueryState<T>(q, builder, root));
 
@@ -354,9 +355,17 @@ public class QueryReader {
                 CriteriaQuery<Tuple> idQuery = builder.createTupleQuery();
                 Root<T> root = idQuery.from(entityClass);
 
-                idQuery.multiselect(idSelections(root));
+                List<Order> orders = sortToOrder(pager.getSorting(), builder, root);
+                if (orders.isEmpty())
+                    idQuery.multiselect(idSelections(root));
+                else idQuery.multiselect(Stream.concat(Stream.of(idSelections(root))
+                        , Stream.of(pager.getSorting().stream()
+                                .map(Sortable::getName)
+                                .map((java.util.function.Function<String, Path>) root::get).toArray(Selection[]::new)))
+                        .toArray(Selection[]::new));
+
                 parsePredicates(q, builder, root, idQuery);
-                idQuery.orderBy(sortToOrder(pager.getSorting(), builder, root));
+                idQuery.orderBy(orders);
                 TypedQuery<Tuple> query = em.createQuery(idQuery);
 
                 if (pager.getOffset() > 0)
@@ -368,7 +377,7 @@ public class QueryReader {
                 List<Tuple> ids = query.getResultList();
 
                 String[] joinPaths = fetchPlan.getJoinPaths();
-                results = joinFetchQuery(ids, entityClass, em, builder, fetchPlan.joins(joinPaths[0]));
+                results = joinFetchQuery(ids, orders, entityClass, em, builder, fetchPlan.joins(joinPaths[0]));
                 joinFetch(results, Arrays.copyOfRange(joinPaths, 1, joinPaths.length), em, builder, fetchPlan);
             }
             if (results == null)
@@ -415,6 +424,7 @@ public class QueryReader {
                 List<Object> gathered = traversePath(results, path);
                 if (gathered.size() > 0)
                     joinFetchRemaining(gathered
+                            , null
                             , gathered.get(0).getClass()
                             , em
                             , builder
@@ -532,6 +542,7 @@ public class QueryReader {
     }
 
     private static <T> List<T> joinFetchQuery(List<Tuple> ids
+            , List<Order> orders
             , Class<T> entityClass
             , EntityManager em
             , CriteriaBuilder builder
@@ -549,15 +560,17 @@ public class QueryReader {
             idMap.put(idNames[i], ids.stream().map(it-> it.get(finalI)).collect(Collectors.toList()));
         }
         explicitIn(criteriaQuery, idMap, builder, root);
+        criteriaQuery.orderBy(orders);
 
         List<T> results = em.createQuery(criteriaQuery).getResultList();
         // fetch remaining associations one by one
-        joinFetchRemaining(results, entityClass, em, builder, idMap, fetch);
+        joinFetchRemaining(results, orders, entityClass, em, builder, idMap, fetch);
 
         return results;
     }
 
     private static void joinFetchRemaining(List<?> results
+            , List<Order> orders
             , Class<?> entityClass
             , EntityManager em
             , CriteriaBuilder builder
@@ -591,6 +604,8 @@ public class QueryReader {
                 }
 
                 explicitIn(criteriaQuery, idMap, builder, root);
+                if (Objects.nonNull(orders))
+                    criteriaQuery.orderBy(orders);
                 List<Object> fetchResults = em.createQuery(criteriaQuery.distinct(true)).getResultList();
 
                 for(int i = 0; i < results.size(); i++) {

@@ -96,11 +96,11 @@ public class Page implements Notifiable {
         return international(resourceBundle, key, true, args);
     }
 
-    private Map<String, Object> data = new HashMap<>();
+    @JsonIgnore protected final Map<String, Object> data = new HashMap<>();
     private List<Form<?>> forms = new ArrayList<>();
 
-    protected @JsonIgnore Locale locale;
-    protected @JsonIgnore ResourceBundle resourceBundle;
+    @JsonIgnore private Locale locale;
+    @JsonIgnore protected ResourceBundle resourceBundle;
     protected List<Notification> notifications = new ArrayList<>();
 
     public Map<String, Object> getData() { return data; }
@@ -110,16 +110,19 @@ public class Page implements Notifiable {
     protected Field Field() { return new Field(); }
     protected <T> Form<T> Form(String name) { return new Form<T>(name); }
 
-    public Locale getLocale() { return locale; }
+    public Locale getLocale() { return locale == null ? Locale.getDefault() : locale; }
     public ResourceBundle getResourceBundle() {
         return resourceBundle;
     }
 
     public String getLang() {
-        return locale.getLanguage();
+        return getLocale().toLanguageTag();
     }
     public String getLanguage() {
-        return locale.getDisplayLanguage();
+        return getLocale().getDisplayLanguage();
+    }
+    public String getLanguageCode() {
+        return getLocale().toString();
     }
 
     @Override
@@ -127,7 +130,7 @@ public class Page implements Notifiable {
         return notifications;
     }
 
-    public Page withData(Map<String, ?> data) {
+    public Page model(Map<String, ?> data) {
         this.data.putAll(data);
         return this;
     }

@@ -8,7 +8,7 @@ public interface Paginate {
     int getSize();
     Long getCount();
     void setCount(Long count);
-    int getPages();
+    Integer getPages();
     List<Sortable> getSorting();
     default boolean isZeroBased() {
         return false;

@@ -91,7 +91,7 @@ public class Pager implements Paginate {
         this.count = count;
     }
 
-    public int getPages() {
+    public Integer getPages() {
         return pages;
     }
     public int getPage() {

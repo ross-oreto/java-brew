@@ -9,7 +9,7 @@ import java.util.stream.IntStream;
 
 import static java.util.Objects.requireNonNull;
 
-public class Routing {
+public class Router {
     /**
      * Recreate a path pattern using the given variables. Variable replacement is done using the
      * current index.
@@ -95,42 +95,42 @@ public class Routing {
         return keyIdx;
     }
 
-    private RouteInfo info;
+    private RouteInfo active;
     private List<NamedRoute> routes;
     private String assetPath;
     private String distPath;
 
-    private Routing() {}
+    private Router() {}
 
-    public Routing(RouteInfo routeInfo, List<NamedRoute> routes) {
-        this.info = routeInfo;
+    public Router(RouteInfo routeInfo, List<NamedRoute> routes) {
+        this.active = routeInfo;
         this.routes = routes;
     }
 
     public String query(String key) {
-        return info.getQuery().get(key);
+        return active.getQuery().get(key);
     }
 
     public String path(String key) {
-        return info.getPathParams().get(key);
+        return active.getPathParams().get(key);
     }
 
-    public Routing withRouteInfo(RouteInfo routeInfo) {
-        this.info = routeInfo;
+    public Router withRouteInfo(RouteInfo routeInfo) {
+        this.active = routeInfo;
         return this;
     }
 
-    public Routing withRoutes(List<NamedRoute> routes) {
+    public Router withRoutes(List<NamedRoute> routes) {
         this.routes = routes;
         return this;
     }
 
-    public Routing withAssetPath(String assetPath) {
+    public Router withAssetPath(String assetPath) {
         this.assetPath = assetPath;
         return this;
     }
 
-    public Routing withDistPath(String distPath) {
+    public Router withDistPath(String distPath) {
         this.distPath = distPath;
         return this;
     }
@@ -142,11 +142,11 @@ public class Routing {
     }
 
     public NamedRoute current() {
-        return at(this.info.getName());
+        return at(this.active.getName());
     }
 
-    public RouteInfo getInfo() {
-        return info;
+    public RouteInfo getActive() {
+        return active;
     }
 
     public List<NamedRoute> getRoutes() {
@@ -163,6 +163,6 @@ public class Routing {
 
     @Override
     public String toString() {
-        return info.toString();
+        return active.toString();
     }
 }

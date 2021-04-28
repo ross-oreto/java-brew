@@ -4,6 +4,7 @@ import io.oreto.brew.obj.Reflect;
 
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
@@ -34,6 +35,23 @@ public class Lists {
     @SafeVarargs
     public static <T> T[] array(T... t) {
         return t;
+    }
+
+    public static <T> List<List<T>> collate( List<T> list, int size, int step ) {
+        return Stream.iterate( 0, i -> i + step )
+                .limit( ( list.size() / step ) + 1 )
+                .map( i -> list.stream()
+                        .skip( i )
+                        .limit( size )
+                        .collect( Collectors.toList() ) )
+                .filter( i -> !i.isEmpty() )
+                .collect( Collectors.toList()) ;
+    }
+
+    public static <T> List<List<T>> subLists(List<T> list) {
+        return IntStream.range(0, list.size())
+                .mapToObj(i -> list.subList(0, i + 1))
+                .collect(Collectors.toList());
     }
 
     public static <T> List<T> page(Stream<T> stream, long skip, long limit) {

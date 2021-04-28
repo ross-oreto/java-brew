@@ -8,7 +8,6 @@ import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.cfg.SerializerFactoryConfig;
 import com.fasterxml.jackson.databind.ser.BeanSerializerFactory;
 
-import javax.persistence.EntityManager;
 import javax.persistence.PersistenceUnitUtil;
 import java.io.IOException;
 import java.util.Objects;
@@ -25,9 +24,9 @@ public class JpaSerializer extends BeanSerializerFactory {
 
     private final PersistenceUnitUtil util;
 
-    public JpaSerializer(EntityManager entityManager) {
+    public JpaSerializer(PersistenceUnitUtil util) {
         super(new SerializerFactoryConfig());
-        util = entityManager.getEntityManagerFactory().getPersistenceUnitUtil();
+        this.util = util;
     }
 
     @Override
@@ -52,7 +51,7 @@ public class JpaSerializer extends BeanSerializerFactory {
         @Override
         public void serialize(Object value, JsonGenerator generator, SerializerProvider provider) throws IOException {
             if (!util.isLoaded(value)) {
-                generator.writeString("NOT_LOADED");
+                generator.writeNull();
                 return;
             }
             defaultSerializer.serialize(value, generator, provider);

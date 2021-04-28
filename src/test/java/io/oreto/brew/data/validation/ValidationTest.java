@@ -28,7 +28,7 @@ public class ValidationTest {
         Pojo2 pojo2 = new Pojo2();
         Form<Pojo2> form =
                 Form.of(Pojo2.class)
-                        .withData(pojo2)
+                        .withModel(pojo2)
                         .withValidator(Validator.of(pojo2.getName()).check(name -> Objects.equals(name, "test")))
                         .withValidator(Validator.of(pojo2.getI()).check(i -> i >= 2))
                         .withValidator(data -> Validator.of(data.getTest())

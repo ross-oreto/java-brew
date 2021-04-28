@@ -2,17 +2,17 @@ package io.oreto.brew.data.jpa;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import io.oreto.brew.collections.Lists;
 import io.oreto.brew.data.Model;
 import io.oreto.brew.serialize.json.JSON;
 import io.oreto.brew.str.Str;
 
+import java.io.IOException;
 import java.util.List;
 
 public class GenerateEntity {
 
-    public static void main(String[] args) throws JsonProcessingException {
+    public static void main(String[] args) throws IOException {
         Options options = JSON.from(args[0], Options.class);
 
         List<String> imports = Lists.of(Model.class.getName());

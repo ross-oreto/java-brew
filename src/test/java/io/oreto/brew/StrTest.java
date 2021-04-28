@@ -254,7 +254,8 @@ public class StrTest {
 
     @Test
     public void replace() {
-        assertEquals("test", Str.of("testing").replace("ing", "").toString());
+        assertEquals("test ing  abc  123 ", Str.of("test,ing,\nabc\r\n123\t")
+                .replace("[,\r\n\t]", " ").toString());
         assertEquals("wha o hat time"
                 , Str.of("what to that time").replace("t", "", 3).toString());
         assertEquals("***es***in***", Str.of("testing").replace("[tg]", "***").toString());

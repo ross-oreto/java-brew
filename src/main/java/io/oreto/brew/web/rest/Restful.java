@@ -21,7 +21,7 @@ import java.util.Optional;
 public interface Restful<ID, T extends Model<ID>> extends Store<ID, T> {
 
     default Validatable validation(T data) {
-        return Form.of(getEntityClass()).withData(data);
+        return Form.of(getEntityClass()).withModel(data);
     }
 
     default Validatable saveValidation(T data) {
@@ -95,10 +95,9 @@ public interface Restful<ID, T extends Model<ID>> extends Store<ID, T> {
 
     default RestResponse<T> save(T entity, Fetch.Plan fetchPlan) {
         Validatable validation = saveValidation(entity);
-        EntityManager em = getEntityManager();
         if (validation.validate()) {
             try {
-                return RestResponse.created(Create(em, entity, fetchPlan));
+                return RestResponse.created(Create(entity, fetchPlan));
             } catch (PersistenceException e) {
                 return persistenceExceptionResponse(e, entity);
             }
@@ -118,31 +117,17 @@ public interface Restful<ID, T extends Model<ID>> extends Store<ID, T> {
        return get(id, Fetch.Plan.none());
     }
     default RestResponse<T> update(T entity, Fetch.Plan fetchPlan) {
-        Validatable validation = updateValidation(entity);
-        EntityManager em = getEntityManager();
-        if (validation.validate()) {
-            try {
-                entity = Update(em, entity, Fetch.Plan.none());
-                entity = Retrieve(em, entity.getId(), fetchPlan).orElse(null);
-                return entity == null ? RestResponse.notFound() : RestResponse.ok(entity);
-            } catch (PersistenceException e) {
-                em.detach(entity);
-                return persistenceExceptionResponse(e, entity);
-            }
-        } else {
-            em.detach(entity);
-            return RestResponse.unprocessable(entity).notify(validation.validationErrors());
-        }
+        return unit(em -> updateAndRetrieve(em, entity, fetchPlan));
     }
     default RestResponse<T> update(T entity) {
        return update(entity, Fetch.Plan.none());
     }
 
     default RestResponse<T> update(ID id, Map<String, Object> fields, Fetch.Plan fetchPlan) {
-        T t = getEntityManager().find(getEntityClass(), id);
+        T t = unit(em -> em.find(getEntityClass(), id));
         if (Objects.nonNull(t)) {
             try {
-                Reflect.copy(t, fields, Reflect.CopyOptions.create().mergeCollections());
+                Reflect.copy(t, fields, Reflect.CopyOptions.create().updateCollections());
             } catch (ReflectiveOperationException e) {
                 RestResponse<T> restResponse = RestResponse.unprocessable();
                 restResponse.withError(e);
@@ -157,23 +142,45 @@ public interface Restful<ID, T extends Model<ID>> extends Store<ID, T> {
         return update(id, fields, Fetch.Plan.none());
     }
 
-    default RestResponse<T> update(ID id, T entity, Iterable<String> fields, Fetch.Plan fetchPlan) {
-        T t = getEntityManager().find(getEntityClass(), id);
-        if (Objects.nonNull(t)) {
+    default RestResponse<T> updateAndRetrieve(EntityManager em, T entity, Fetch.Plan fetchPlan) {
+        Validatable validation = updateValidation(entity);
+        if (validation.validate()) {
             try {
-                Reflect.copy(t, entity, fields, Reflect.CopyOptions.create().mergeCollections());
-            } catch (ReflectiveOperationException e) {
-                RestResponse<T> restResponse = RestResponse.unprocessable();
-                restResponse.withError(e);
-                return restResponse;
+                entity = Update(em, entity, Fetch.Plan.none());
+                entity = Retrieve(em, entity.getId(), fetchPlan).orElse(null);
+                return entity == null ? RestResponse.notFound() : RestResponse.ok(entity);
+            } catch (PersistenceException e) {
+                em.detach(entity);
+                return persistenceExceptionResponse(e, entity);
             }
-            return update(t, fetchPlan);
         } else {
-            return RestResponse.notFound();
+            em.detach(entity);
+            return RestResponse.unprocessable(entity).notify(validation.validationErrors());
         }
+    }
+
+    default RestResponse<T> update(ID id, T entity, Iterable<String> fields, Fetch.Plan fetchPlan) {
+        return unit(em -> {
+            T t = em.find(getEntityClass(), id);
+            if (Objects.nonNull(t)) {
+                try {
+                    Reflect.copy(t, entity, fields, Reflect.CopyOptions.create().updateCollections());
+                } catch (ReflectiveOperationException e) {
+                    RestResponse<T> restResponse = RestResponse.unprocessable();
+                    restResponse.withError(e);
+                    return restResponse;
+                }
+                return updateAndRetrieve(em, t, fetchPlan);
+            } else {
+                return RestResponse.notFound();
+            }
+        });
     }
     default RestResponse<T> update(ID id, T entity, Iterable<String> fields) {
        return update(id, entity, fields, Fetch.Plan.none());
+    }
+    default RestResponse<T> update(ID id, T entity) {
+        return update(id, entity, null, Fetch.Plan.none());
     }
 
     default RestResponse<T> replace(ID id, T entity, Fetch.Plan fetchPlan) {
@@ -196,7 +203,7 @@ public interface Restful<ID, T extends Model<ID>> extends Store<ID, T> {
     }
 
     default RestResponse<T> delete(ID id) {
-        T t = getEntityManager().find(getEntityClass(), id);
+        T t = unit(em -> em.find(getEntityClass(), id));
         return t == null ? RestResponse.notFound() : delete(t);
     }
 }
