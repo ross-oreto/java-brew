@@ -17,14 +17,14 @@
 
     <distributionManagement>
         <snapshotRepository>
-            <id>nexus</id>
-            <name>nexus maven snapshots</name>
-            <url>https://rossoreto.com/repository/maven-snapshots/</url>
+            <id>reposilite-snapshots</id>
+            <name>reposilite-snapshots</name>
+            <url>http://oreto-maven.duckdns.org:8002/snapshots</url>
         </snapshotRepository>
         <repository>
-            <id>nexus</id>
-            <name>nexus maven releases</name>
-            <url>https://rossoreto.com/repository/maven-releases/</url>
+            <id>reposilite-releases</id>
+            <name>reposilite-releases</name>
+            <url>http://oreto-maven.duckdns.org:8002/releases</url>
         </repository>
     </distributionManagement>
 
