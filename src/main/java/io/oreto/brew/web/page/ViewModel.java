@@ -173,6 +173,11 @@ public class ViewModel extends Page {
                 .findFirst().orElse(null);
     }
 
+    @Override @JsonIgnore
+    public List<Form<?>> getForms() {
+        return super.getForms();
+    }
+
     @Override
     public ViewModel notify(String message, Notification.Type type, String group, String... args) {
         super.notify(message, type, group, args);
@@ -277,6 +282,7 @@ public class ViewModel extends Page {
 
     public Map<String, Object> model() {
         Map<String, Object> asMap = JSON.asMap(this);
+        asMap.putAll(getForms().stream().collect(Collectors.toMap(Form::getName, JSON::asMap)));
         asMap.putAll(data);
         return asMap;
     }

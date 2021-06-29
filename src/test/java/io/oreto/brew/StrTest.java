@@ -99,6 +99,39 @@ public class StrTest {
     }
 
     @Test
+    public void isEmail() {
+        assertTrue(Str.isEmail("test.ing@a-b-c.com"));
+        assertTrue(Str.isEmail("a.b@c.co"));
+        assertTrue(Str.isEmail("     a@b.com      "));
+        assertTrue(Str.isEmail("abc-d@mail.com"));
+        assertTrue(Str.isEmail("abc.def@mail.com"));
+        assertTrue(Str.isEmail("abc@mail.com"));
+        assertTrue(Str.isEmail("abc_def@mail.com"));
+        assertTrue(Str.isEmail("abc.def@mail.cc"));
+        assertTrue(Str.isEmail("abc.def@mail-archive.com"));
+        assertTrue(Str.isEmail("abc.def@mail.org"));
+
+        // invalid
+        assertFalse(Str.isEmail("a.com"));
+        assertFalse(Str.isEmail(".com"));
+        assertFalse(Str.isEmail("."));
+        assertFalse(Str.isEmail("test"));
+        assertFalse(Str.isEmail("@"));
+        assertFalse(Str.isEmail("@c"));
+        assertFalse(Str.isEmail("ab@.cc"));
+        assertFalse(Str.isEmail("abc-@mail.com"));
+        assertFalse(Str.isEmail("abc..def@mail.com"));
+        assertFalse(Str.isEmail(".abc@mail.com"));
+        assertFalse(Str.isEmail("abc#def@mail.com"));
+        assertFalse(Str.isEmail("abc.def@mail#archive.com"));
+        assertFalse(Str.isEmail("abc.def@mail.c"));
+        assertFalse(Str.isEmail("abc.def@mail"));
+        assertFalse(Str.isEmail("abc.def@mail..com"));
+        assertFalse(Str.isEmail("abc.def@mail_co"));
+        assertFalse(Str.isEmail("a.b@c_f.g_com"));
+    }
+
+    @Test
     public void to() {
         assertEquals (Optional.of(31), Str.toInteger("31"));
         assertEquals (Optional.of(2147483647), Str.toInteger("2147483647"));

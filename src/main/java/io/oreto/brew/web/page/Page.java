@@ -21,7 +21,7 @@ public class Page implements Notifiable {
             return toLocale(params.get(C.lang));
         else if (Objects.nonNull(headers) && headers.containsKey(LANG_ACCEPT_HEADER))
             return toLocale(headers.get(LANG_ACCEPT_HEADER));
-        return toLocale("en-US");
+        return Locale.getDefault();
     }
 
     private static Optional<String> international(ResourceBundle resourceBundle, String key, boolean fuzzy, Object... args) {

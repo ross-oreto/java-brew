@@ -5,12 +5,9 @@ import io.oreto.brew.data.Pager;
 import io.oreto.brew.data.Paginate;
 import io.oreto.brew.data.Sortable;
 import io.oreto.brew.obj.Reflect;
-import io.oreto.brew.obj.Safe;
-import io.oreto.brew.str.Str;
 
 import javax.persistence.*;
 import java.lang.reflect.Field;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -59,7 +56,7 @@ public class DataStore {
     public static <T> Paged<T> findAll(EntityManager entityManager
             , Class<T> entityClass
             , String q) {
-       return findAll(entityManager, entityClass, q, Fetch.Plan.none());
+        return findAll(entityManager, entityClass, q, Fetch.Plan.none());
     }
 
     public static <T> Paged<T> list(EntityManager entityManager
@@ -102,7 +99,7 @@ public class DataStore {
             , Class<T> entityClass
             , String q
             , Paginate pager) {
-       return findOne(entityManager, entityClass, q, pager, Fetch.Plan.none());
+        return findOne(entityManager, entityClass, q, pager, Fetch.Plan.none());
     }
 
     public static <T> Optional<T> findOne(EntityManager entityManager
@@ -230,7 +227,7 @@ public class DataStore {
     }
 
     public static <T> T update(EntityManager entityManager, T t) {
-       return update(entityManager, t, Fetch.Plan.none());
+        return update(entityManager, t, Fetch.Plan.none());
     }
 
     public static <T> T delete(EntityManager entityManager, T t) {
@@ -242,6 +239,7 @@ public class DataStore {
                 trx.begin();
                 entityManager.remove(entityManager.contains(t) ? t: entityManager.merge(t));
                 entityManager.flush();
+                entityManager.clear();
                 trx.commit();
             }
             return t;
@@ -261,6 +259,7 @@ public class DataStore {
                     count++;
                 }
                 entityManager.flush();
+                entityManager.clear();
             } else {
                 trx.begin();
                 for(T t : list(entityManager, entityClass, pager, Fetch.Plan.none()).getPage()) {
@@ -268,6 +267,7 @@ public class DataStore {
                     count++;
                 }
                 entityManager.flush();
+                entityManager.clear();
                 trx.commit();
             }
         } catch(Exception x) {
@@ -291,6 +291,7 @@ public class DataStore {
                     count++;
                 }
                 entityManager.flush();
+                entityManager.clear();
             } else {
                 trx.begin();
                 for(T t : findAll(entityManager, entityClass, q, pager, Fetch.Plan.none()).getPage()) {
@@ -298,6 +299,7 @@ public class DataStore {
                     count++;
                 }
                 entityManager.flush();
+                entityManager.clear();
                 trx.commit();
             }
         } catch(Exception x) {
@@ -318,188 +320,161 @@ public class DataStore {
 
         public static class Func {
             public static String of(Function function, String name) {
-                return String.format("%s{%s}", function.name(), name);
+                return QStr.Func.of(function, name);
             }
         }
 
-        private final Str str = Str.of();
+        private final QStr q = QStr.of();
         private final Class<T> entityClass;
-
-        private boolean or;
-        private Integer page;
-        private Integer max;
-        private String[] order;
-        private boolean started;
 
         protected Q(Class<T> entityClass) {
             this.entityClass = entityClass;
-            this.order = new String[] {};
-        }
-
-        private Str logic() {
-            if (started) {
-                str.space()
-                        .add(or ? QueryReader.Logical.Operator.or.name() : QueryReader.Logical.Operator.and.name())
-                        .space();
-            } else
-                started = true;
-            return str;
-        }
-
-        private Q<T> op(String name, QueryReader.Expression.Operator op, Object value, Opt... opts) {
-            String val = Objects.nonNull(value) ? value.toString() : null;
-            val = Objects.nonNull(val) && val.contains(" ") && !val.trim().startsWith("\"")
-                    ? String.format("\"%s\"", val)
-                    : val;
-            logic()
-                    .add(name)
-                    .add("::")
-                    .add(Arrays.stream(opts).anyMatch(it -> it == Opt.not) ? QueryReader.Expression.NOT : Str.EMPTY)
-                    .add(op.name())
-                    .add(Arrays.stream(opts).anyMatch(it -> it == Opt.prop) ? QueryReader.Expression.PROP : Str.EMPTY)
-                    .add(':')
-                    .add(val);
-            return this;
         }
 
         public Q<T> page(int page) {
-            this.page = page;
+            q.page(page);
             return this;
         }
 
         public Q<T> order(String... order) {
-            this.order = order;
+            q.order(order);
             return this;
         }
 
         public Q<T> order(List<Sortable> order) {
-            this.order = order.stream().map(Sortable::toString).toArray(String[]::new);
+            q.order(order.stream().map(Sortable::toString).toArray(String[]::new));
             return this;
         }
 
         public Q<T> limit(int max) {
-            this.max = max;
+            q.limit(max);
             return this;
         }
 
         public Q<T> eq(String name, Object value, Opt... opts) {
-            boolean negate = Arrays.stream(opts).anyMatch(it -> it == Opt.not);
-            if (value == null)
-                return negate ? isNotNull(name) : isNull(name);
-
-            return op(name, QueryReader.Expression.Operator.eq, Safe.of(value).q(Object::toString).val(), opts);
+            q.eq(name, value, opts);
+            return this;
         }
 
         public Q<T> gt(String name, Object value, Opt... opts) {
-            return op(name, QueryReader.Expression.Operator.gt, value, opts);
+            q.gt(name, value, opts);
+            return this;
         }
 
         public Q<T> gte(String name, Object value, Opt... opts) {
-            return op(name, QueryReader.Expression.Operator.gte, value, opts);
+            q.gte(name, value, opts);
+            return this;
         }
 
         public Q<T> lt(String name, Object value, Opt... opts) {
-            return op(name, QueryReader.Expression.Operator.lt, value, opts);
+            q.lt(name, value, opts);
+            return this;
         }
 
         public Q<T> lte(String name, Object value, Opt... opts) {
-            return op(name, QueryReader.Expression.Operator.lte, value, opts);
+            q.lte(name, value, opts);
+            return this;
         }
 
         public Q<T> isNull(String name) {
-            logic().add(name).add("::").add(QueryReader.Expression.Operator.isnull.name());
+            q.isNull(name);
             return this;
         }
 
         public Q<T> isNotNull(String name) {
-            logic().add(name).add("::").add(QueryReader.Expression.NOT).add(QueryReader.Expression.Operator.isnull.name());
+            q.isNotNull(name);
             return this;
         }
 
         public Q<T> contains(String name, String value, Opt... opts) {
-            return op(name, QueryReader.Expression.Operator.contains, value, opts);
+            q.contains(name, value, opts);
+            return this;
         }
 
         public Q<T> iContains(String name, String value, Opt... opts) {
-            return op(name, QueryReader.Expression.Operator.icontains, value, opts);
+            q.iContains(name, value, opts);
+            return this;
         }
 
         public Q<T> startsWith(String name, String value, Opt... opts) {
-            return op(name, QueryReader.Expression.Operator.startswith, value, opts);
+            q.startsWith(name, value, opts);
+            return this;
         }
 
         public Q<T> iStartsWith(String name, String value, Opt... opts) {
-            return op(name, QueryReader.Expression.Operator.istartswith, value, opts);
+            q.iStartsWith(name, value, opts);
+            return this;
         }
 
         public Q<T> endsWith(String name, String value, Opt... opts) {
-            return op(name, QueryReader.Expression.Operator.endswith, value, opts);
+            q.endsWith(name, value, opts);
+            return this;
         }
 
         public Q<T> iEndsWith(String name, String value, Opt... opts) {
-            return op(name, QueryReader.Expression.Operator.iendswith, value, opts);
+            q.iEndsWith(name, value, opts);
+            return this;
         }
 
         public Q<T> or() {
-            or = true;
+            q.or();
             return this;
         }
 
         public Q<T> endOr() {
-            or = false;
+            q.endOr();
             return this;
         }
 
         public Q<T> group() {
-            logic().add('(');
-            started = false;
+            q.group();
             return this;
         }
 
         public Q<T> endGroup() {
-            str.add(')');
+            q.endGroup();
             return this;
         }
 
         public Paged<T> find(EntityManager em, Fetch.Plan fetchPlan) {
             Pager pager = Pager.of();
-            if (Objects.nonNull(page))
-                pager.setPage(page);
+            if (Objects.nonNull(q.page))
+                pager.setPage(q.page);
 
-            if (Objects.nonNull(max))
-                pager.setSize(max);
+            if (Objects.nonNull(q.max))
+                pager.setSize(q.max);
 
-            if (Objects.nonNull(order) && order.length > 0)
-                pager.withSorting(order);
+            if (Objects.nonNull(q.order) && q.order.length > 0)
+                pager.withSorting(q.order);
 
-            return QueryReader.query(str.toString()
+            return QueryReader.query(q.toString()
                     , pager
                     , em
                     , entityClass
                     , fetchPlan);
         }
         public Paged<T> find(EntityManager em) {
-           return find(em, Fetch.Plan.none());
+            return find(em, Fetch.Plan.none());
         }
 
         public Optional<T> findOne(EntityManager em, Fetch.Plan fetchPlan) {
-            return DataStore.findOne(em, entityClass, str.toString(), Pager.of().withSorting(order), fetchPlan);
+            return DataStore.findOne(em, entityClass, q.toString(), Pager.of().withSorting(q.order), fetchPlan);
         }
         public Optional<T> findOne(EntityManager em) {
             return findOne(em, Fetch.Plan.none());
         }
 
         public long count(EntityManager em) {
-            return DataStore.count(em, entityClass, str.toString());
+            return DataStore.count(em, entityClass, q.toString());
         }
 
         public boolean exists(EntityManager em) {
-            return DataStore.exists(em, entityClass, str.toString());
+            return DataStore.exists(em, entityClass, q.toString());
         }
 
         @Override
         public String toString() {
-            return str.toString();
+            return q.toString();
         }
     }
 }

@@ -33,8 +33,8 @@ public class JSON {
         return mapper;
     }
 
-    protected static final ObjectMapper mapper = mapper();
-    protected static final Map<String, ObjectMapper> mappers = new HashMap<String, ObjectMapper>(){{ put("", mapper); }};
+    public static final ObjectMapper mapper = mapper();
+    public static final Map<String, ObjectMapper> mappers = new HashMap<String, ObjectMapper>(){{ put("", mapper); }};
 
     public static ObjectReader reader() {
         return mapper.reader();

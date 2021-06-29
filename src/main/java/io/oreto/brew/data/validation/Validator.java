@@ -285,7 +285,7 @@ public class Validator<T> {
 
     public Validator<T> email() {
         message.withArgs(data.toString()).name = Message.EMAIL;
-        return check(data -> Objects.nonNull(data) && data.toString().matches(Message.emailPattern));
+        return check(data -> Objects.nonNull(data) && Str.isEmail(data.toString()));
     }
 
     static public class Message {

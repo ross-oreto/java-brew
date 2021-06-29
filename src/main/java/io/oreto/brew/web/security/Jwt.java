@@ -1,10 +1,9 @@
 package io.oreto.brew.web.security;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.security.SignatureException;
 import io.oreto.brew.security.Anonymous;
 import io.oreto.brew.security.UserDetails;
 import io.oreto.brew.serialize.json.JSON;
@@ -14,8 +13,10 @@ import io.oreto.brew.web.page.constants.C;
 
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.Date;
 import java.util.Map;
@@ -40,9 +41,9 @@ public class Jwt {
         return null;
     }
 
-    public static String createJwt(SecretKey key, UserDetails user, String issuer) {
-        Date now = new Date();
-        Date exp = new Date(System.currentTimeMillis() + (24000*3600));
+    public static String createJwt(SecretKey key, UserDetails user, String issuer, int expireIn) {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime exp = now.plusSeconds(expireIn);
 
         String userClaim;
         try {
@@ -50,11 +51,13 @@ public class Jwt {
         } catch (JsonProcessingException e) {
             userClaim = null;
         }
+        Date d1 = java.sql.Timestamp.valueOf(now);
+        Date d2 = java.sql.Timestamp.valueOf(exp);
         return Jwts.builder()
                 .setId(UUID.randomUUID().toString().replace("-", ""))
-                .setNotBefore(now)
-                .setExpiration(exp)
-                .setIssuedAt(now)
+                .setNotBefore(d1)
+                .setExpiration(d2)
+                .setIssuedAt(d1)
                 .setIssuer(issuer)
                 .setSubject(user.getUsername())
                 .claim(C.user, userClaim)
@@ -62,29 +65,33 @@ public class Jwt {
                 .compact();
     }
 
-    public static Claims readJwt(SecretKey key, String jwt) {
+    public static String createJwt(SecretKey key, UserDetails user, String issuer) {
+        return createJwt(key, user, issuer, 3600);
+    }
+
+    public static Claims readJwt(SecretKey key, String jwt)
+            throws ExpiredJwtException
+            , UnsupportedJwtException
+            , MalformedJwtException
+            , SignatureException
+            , IllegalArgumentException{
         return Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(jwt).getBody();
     }
 
     @SuppressWarnings("unchecked")
     public static <T extends UserDetails> T readUser(SecretKey key
             , String jwt
-            , Class<T> userClass) {
+            , Class<T> userClass) throws IOException {
         if (Str.isBlank(jwt))
             return (T) new Anonymous();
-        try {
-            Claims claims = readJwt(key, jwt);
-            return JSON.reader().readValue(claims.get(C.user).toString(), userClass);
-        } catch (Exception e) {
-            System.out.println(e.getMessage());
-        }
-        return (T) new Anonymous();
+        Claims claims = readJwt(key, jwt);
+        return JSON.reader().readValue(claims.get(C.user).toString(), userClass);
     }
 
     public static <T extends UserDetails> T readUser(SecretKey key
             , String jwt
             , Map<String, String> headers
-            , Class<T> userClass) {
+            , Class<T> userClass) throws IOException {
         return readUser(key
                 , jwt == null ? HttpContext.getAuthorizationToken(headers).orElse(Str.EMPTY) : jwt
                 , userClass);
@@ -92,7 +99,7 @@ public class Jwt {
 
     public static <T extends UserDetails> T readUser(SecretKey key
             , Map<String, String> headers
-            , Class<T> userClass) {
+            , Class<T> userClass) throws IOException {
         return readUser(key, null, headers, userClass);
     }
 
@@ -131,21 +138,21 @@ public class Jwt {
 
     public <T extends UserDetails> T readUser(Map<String, String> cookies
             , Map<String, String> headers
-            , Class<T> userClass) {
+            , Class<T> userClass) throws IOException {
         return readUser(getKey(), cookieName == null ? null : cookies.get(cookieName), headers, userClass);
     }
 
     public <T extends UserDetails> T readUserFromCookie(Map<String, String> cookies
-            , Class<T> userClass) {
+            , Class<T> userClass) throws IOException {
         return readUser(getKey(), cookieName == null ? null : cookies.get(cookieName), null, userClass);
     }
 
     public <T extends UserDetails> T readUserFromHeader(Map<String, String> headers
-            , Class<T> userClass) {
+            , Class<T> userClass) throws IOException {
         return readUser(getKey(), null, headers, userClass);
     }
 
-    public <T extends UserDetails> T readUser(String jwt, Class<T> userClass) {
+    public <T extends UserDetails> T readUser(String jwt, Class<T> userClass) throws IOException {
         return readUser(getKey(), jwt, userClass);
     }
 

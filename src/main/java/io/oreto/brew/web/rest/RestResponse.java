@@ -11,9 +11,16 @@ import io.oreto.brew.web.page.Notification;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 public class RestResponse<T> implements Notifiable, Selectable {
+    public static <T> RestResponse<T> of(int status, String reason) {
+        return new RestResponse<T>(status).withReason(reason);
+    }
+    public static <T> RestResponse<T> of(T body, int status, String reason) {
+        return new RestResponse<T>(body, status).withReason(reason);
+    }
 
     public static <T> RestResponse<T> ok(T body) {
         return new RestResponse<T>(body);
@@ -202,5 +209,14 @@ public class RestResponse<T> implements Notifiable, Selectable {
     public RestResponse<T> notify(Iterable<Validator.Invalid> notifications) {
         Notifiable.super.notify(notifications);
         return this;
+    }
+
+    public RestResponse<T> localize(Locale locale) {
+        getNotifications().forEach(it -> it.localize(locale));
+        return this;
+    }
+
+    public RestResponse<T> localize() {
+        return localize(Locale.getDefault());
     }
 }

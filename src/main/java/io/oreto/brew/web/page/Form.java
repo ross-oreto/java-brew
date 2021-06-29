@@ -72,7 +72,7 @@ public class Form<T> implements Notifiable, Validatable {
         }
 
         // finally run validators on the form
-        for(Validator<?> validator : validators) {
+        for(Validator<?> validator : validators()) {
             validator.validate().ifPresent(this::withValidationError);
         }
         if (Objects.nonNull(locale))

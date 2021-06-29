@@ -203,7 +203,17 @@ public interface Restful<ID, T extends Model<ID>> extends Store<ID, T> {
     }
 
     default RestResponse<T> delete(ID id) {
-        T t = unit(em -> em.find(getEntityClass(), id));
-        return t == null ? RestResponse.notFound() : delete(t);
+        return unit(em ->  {
+            T t = em.find(getEntityClass(), id);
+            if (t == null)
+                return RestResponse.notFound();
+            Validatable validation = deleteValidation(t);
+            if (validation.validate()) {
+                Delete(em, t);
+                return RestResponse.noContent();
+            } else {
+                return RestResponse.unprocessable(t).notify(validation.validationErrors());
+            }
+        });
     }
 }

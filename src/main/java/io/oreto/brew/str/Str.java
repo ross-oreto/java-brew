@@ -178,6 +178,67 @@ public class Str implements CharSequence, java.io.Serializable, Comparable<CharS
         return s != null && (s.equals(TRUE) || s.equals(FALSE));
     }
 
+    public static boolean isAlphaNumeric(char c) {
+        return Character.isAlphabetic(c) || Character.isDigit(c);
+    }
+
+    // A valid email address consists of an email prefix and an email domain, both in acceptable formats.
+    // The prefix appears to the left of the @ symbol.
+    // The domain appears to the right of the @ symbol.
+    // Allowed characters: letters (a-z), numbers, underscores, periods, and dashes.
+    // An underscore, period, or dash must be followed by one or more letter or number.
+    public static boolean isEmail(CharSequence s) {
+        if (s == null)
+            return false;
+        String str = s.toString().trim();
+        s = str;
+        int len = s.length();
+        // can't start or end with [_.-@]
+        if (len == 0 || !isAlphaNumeric(s.charAt(0)) || !isAlphaNumeric(s.charAt(len - 1)))
+            return false;
+        // make sure final domain is at least two characters long
+        int i = str.lastIndexOf('.');
+        if (i < 0)
+            return false; // must have one dot at least
+        if (len - i <= 2)
+            return false;
+
+        boolean at = false;      // encountered @ symbol
+        boolean alpha = true;    // [_.-@] expect an alpha numeric char after
+        boolean dotted = false;  // dot in domain
+        for (i = 0; i < len; i++) {
+            char c = s.charAt(i);
+            boolean alphaNumeric = isAlphaNumeric(c);
+            if (alpha) {
+                if (alphaNumeric) {
+                    alpha = false;
+                } else
+                    return false;
+            } else if (c == '@') {
+                if (at)
+                    return false; // can't have two @ symbols
+                at = true;
+                alpha = true;
+            } else {
+                if (c == '.') {
+                    alpha = true;
+                    if (at)
+                        dotted = true;
+                } else if (c == '_') {
+                    if (at) // underscores are not permitted in domain names
+                        return false;
+                    else
+                        alpha = true;
+                }
+                else if (c == '-') {
+                    alpha = true;
+                } else if (!alphaNumeric)
+                    return false;
+            }
+        }
+        return dotted;
+    }
+
     public static Optional<Boolean> toBoolean(CharSequence s) {
         try {
             return isBoolean(s) ? Optional.of(Boolean.parseBoolean(s.toString())) : Optional.empty();
