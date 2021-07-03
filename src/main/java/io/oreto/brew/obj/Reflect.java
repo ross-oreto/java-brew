@@ -496,7 +496,7 @@ public class Reflect {
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
-    private static void copy(Object o1, Map<String, Object> values, CopyOptions copyOptions)
+    public static void copy(Object o1, Map<String, Object> values, CopyOptions copyOptions)
             throws ReflectiveOperationException {
 
         Iterable<Field> iterable = getAllFields(o1, copyOptions.ignore).stream()

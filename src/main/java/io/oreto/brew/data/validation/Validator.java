@@ -175,6 +175,11 @@ public class Validator<T> {
         return this;
     }
 
+    public Validator<T> args(String... args) {
+        this.message.args = args;
+        return this;
+    }
+
     public Optional<Invalid> validate() {
         return validator.apply(data)
                 ? Validator.Valid()
